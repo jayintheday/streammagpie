@@ -1,0 +1,67 @@
+# electron-builder — macOS packaging for StreamMagpie.
+#
+#   npm run dist       # unpacked .app (NO dmg)
+#   npm run dist:dmg   # .app + disk image
+#
+# Official builds are Gumroad only. Never GitHub Release assets. `publish: null`.
+#
+# THREE NAMES:
+#   appId        co.streammagpie.app     TCC / userData — never rename
+#   productName  StreamMagpie            user-visible; the .app and DMG filename
+#   name         @streammagpie/app       npm workspace only
+appId: co.streammagpie.app
+productName: StreamMagpie
+publish: null
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+# Vendored helpers. Directories are tracked; CONTENTS are gitignored.
+# Missing sources fail OPEN: grep the log for `file source doesn't exist` (want 0).
+extraResources:
+  - from: ../../vendor/ffmpeg/arm64
+    to: ffmpeg
+  - from: ../../vendor/python/arm64
+    to: python
+  - from: ../../vendor/js
+    to: js
+  - from: ../../vendor/ytdlp
+    to: ytdlp
+asar: true
+mac:
+  target:
+    - target: dir
+      arch:
+        - arm64
+    - target: dmg
+      arch:
+        - arm64
+  category: public.app-category.music
+  icon: build/icon.icns
+  # No `identity:` key. Official: CSC_NAME="Intheday Ltd (29UYFH4USR)"
+  # Do not prefix CSC_NAME with "Developer ID Application:".
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # An explicit LIST, not a directory walk: only these four get signed with the
+  # entitlements above. Nothing under python/lib (libpython, the lib-dynload
+  # .so modules) is signed here. See the notes below `</plist>` in
+  # build/entitlements.mac.plist for what that may cost at notarize time.
+  binaries:
+    - Contents/Resources/ffmpeg/ffmpeg
+    - Contents/Resources/ffmpeg/ffprobe
+    - Contents/Resources/js/qjs
+    - Contents/Resources/python/bin/python3
+  notarize: true
+  extendInfo:
+    LSMinimumSystemVersion: 14.0.0
+    NSDownloadsFolderUsageDescription: StreamMagpie saves converted audio into a folder you choose.
+    NSDesktopFolderUsageDescription: StreamMagpie can save converted audio onto your Desktop if you choose that folder.
+    NSDocumentsFolderUsageDescription: StreamMagpie can save converted audio into Documents if you choose that folder.
+    NSCameraUsageDescription: null
+    NSMicrophoneUsageDescription: null
+    NSAudioCaptureUsageDescription: null
+    NSBluetoothAlwaysUsageDescription: null
+    NSBluetoothPeripheralUsageDescription: null

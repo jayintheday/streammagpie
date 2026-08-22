@@ -1,0 +1,36 @@
+{
+  "name": "streammagpie",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "macOS on-device YouTube to audio converter. Monorepo root.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jayintheday/streammagpie.git"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "npm run dev -w packages/app",
+    "typecheck": "tsc -b && npm run typecheck -w packages/app",
+    "vendor:ffmpeg": "bash scripts/build-ffmpeg.sh",
+    "vendor:js": "bash scripts/vendor-js.sh",
+    "vendor:python": "bash scripts/vendor-python.sh",
+    "vendor:ytdlp": "bash scripts/vendor-ytdlp.sh",
+    "vendor:verify": "bash scripts/build-ffmpeg.sh --verify && bash scripts/vendor-js.sh --verify && bash scripts/vendor-python.sh --verify && bash scripts/vendor-ytdlp.sh --verify"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

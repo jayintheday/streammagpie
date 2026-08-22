@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  entitlements.mac.plist — hardened runtime exceptions for StreamMagpie.
+
+  electron-builder.yml passes this file as BOTH `mac.entitlements` (the outer
+  .app) and `mac.entitlementsInherit` (every nested helper, and the four loose
+  sidecar executables named under `mac.binaries`). Hardened Runtime is mandatory
+  for notarization, and it switches off several things a Chromium app needs.
+
+  ENTITLEMENTS ARE A SIGNING INPUT, not a runtime config file. codesign embeds
+  this blob into the signature, so an edit here takes effect at the NEXT build
+  and never on an already signed app; and a malformed file fails the build
+  rather than degrading at runtime.
+
+  Exactly two keys, and both are Electron's rather than StreamMagpie's:
+
+    com.apple.security.cs.allow-jit
+      V8 compiles JavaScript to native code at runtime and needs MAP_JIT pages
+      to do it. Denied, Hardened Runtime refuses the mapping and Electron does
+      not start at all. Concrete need: this is a Chromium app.
+
+    com.apple.security.cs.allow-unsigned-executable-memory
+      Parts of Chromium create executable memory outside the MAP_JIT mechanism
+      that allow-jit covers, which Hardened Runtime's W^X policy forbids on its
+      own. Taken on Electron's documented say so rather than derived from first
+      principles. Symptom if wrongly removed: crash at launch.
+
+  THE RULE FOR THIS FILE: every key is a security exception, so it must name a
+  concrete thing in THIS app that needs it. "the signing tool's default set
+  includes it" is not a justification, because that set is written for the union
+  of all Electron apps. Keys that are deliberately ABSENT are recorded with
+  their evidence below the closing plist tag; read that before re-adding one.
+
+  ⚠ NEVER WRITE A DOUBLE HYPHEN INSIDE ANY COMMENT ABOVE THE CLOSING PLIST TAG,
+  not even inside backticks, and not even when quoting a command line flag. XML
+  forbids it in a comment, and Apple's AMFI parser is the one tool in the chain
+  that enforces it. The full account, the working notes on what this app
+  actually bundles, and anything that has to quote a flag, all live BELOW the
+  closing tag: the only region AMFI does not read.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+</dict>
+</plist>
+<!--
+  ==========================================================================
+  THE DOUBLE HYPHEN TRAP — read before editing any comment above </plist>
+  ==========================================================================
+
+  Symptom, and it blocks the entire signed build:
+
+      codesign: Failed to parse entitlements:
+                AMFIUnserializeXML: syntax error near line 37
+
+  Cause: a literal `--` inside an XML comment. XML forbids it, and AMFI's
+  parser is the only tool in the chain that enforces it — quoting a command
+  line flag in backticks is enough to do it. The line number in the error is
+  accurate; go straight there.
+
+  ⚠ plutil -lint CANNOT CATCH THIS. It passes the broken file, because it
+  discards comments before validating. Only a real codesign sees it.
+
+  TWO THINGS THAT ARE PLAUSIBLE AND WRONG:
+
+    - It is NOT "AMFI cannot handle comments inside the <plist> element".
+      Per-key comments in <dict> parse fine; they are simply not worth the
+      risk here, which is why the two keys above are documented in the header
+      instead.
+
+    - Moving comments ABOVE <plist version="1.0"> does NOT fix it. AMFI parses
+      that region too. ONLY content after </plist> is ignored -- which is why
+      this block can quote flags like --force and --deep freely, and the
+      header cannot.
+
+    - Non-ASCII is a red herring: box rules, em dashes and the warning sign
+      all parse fine inside <dict>.
+
+  TEST THIS FILE IN ONE SECOND, instead of a full packaging round trip. AMFI
+  parses the entitlements blob whatever is being signed, so sign a throwaway
+  copy of any binary with it. Note the PREFIXED identity form here: codesign
+  wants the full certificate common name, unlike CSC_NAME in the build, which
+  must NOT carry the prefix (see electron-builder.yml):
+
+      cp /bin/echo /tmp/probe && codesign --force --options runtime \
+        --entitlements packages/app/build/entitlements.mac.plist \
+        --sign "Developer ID Application: Intheday Ltd (29UYFH4USR)" /tmp/probe
+
+  Silence and exit 0 means this file is good. Add `-d --entitlements -` on the
+  probe afterwards to see exactly which keys got embedded.
+
+  ⚠ NOT RUN AGAINST A REAL CODESIGN YET. Signing needs the user's keychain and
+  is the release operator's step; this file has never been handed to a real
+  codesign. The static guard in `test/app-paths.test.ts` ("entitlements
+  comments above plist have no double hyphen") stands in for it until then, and
+  it is a string assertion doing a parser's job on purpose.
+
+  ==========================================================================
+  WHAT THIS APP ACTUALLY BUNDLES — the thing the open questions below turn on
+  ==========================================================================
+
+  StreamMagpie's payload is THIRD-PARTY SIDECARS, not code we compiled. Under
+  `Contents/Resources`, from `extraResources` in electron-builder.yml:
+
+    python/    a full CPython runtime from python-build-standalone. That is
+               `python/bin/python3` PLUS a `python/lib/` tree containing a
+               `libpython3.x.dylib` and many Mach-O `.so` C-extension modules
+               (lib-dynload: _ssl, _socket, _hashlib, binascii, and the rest).
+               [inferred: the tree is gitignored and absent from a fresh clone;
+               layout is python-build-standalone's documented install_only
+               layout, fetched by scripts/vendor-python.sh]
+    ffmpeg/    static LGPL `ffmpeg` and `ffprobe` built by scripts/build-ffmpeg.sh
+    js/        `qjs`, the QuickJS interpreter yt-dlp drives for n-sig
+    ytdlp/     the floor `yt_dlp.whl`. Data, not Mach-O. Not a signing concern.
+
+  ⚠ `mac.binaries` NAMES ONLY THE FOUR LOOSE EXECUTABLES: ffmpeg, ffprobe,
+  js/qjs, python/bin/python3. It is a LIST, not a directory walk. Nothing under
+  `python/lib/` is in it, so as configured today electron-builder signs neither
+  the libpython dylib nor a single `.so`. They ship exactly as downloaded,
+  carrying whatever signature python-build-standalone gave them (in practice
+  ad-hoc), which is a DIFFERENT team from ours.
+
+  ==========================================================================
+  TWO OPEN QUESTIONS — [inferred], and only the first signed build settles them
+  ==========================================================================
+
+  Both are honest unknowns. Neither can be resolved by reading: they are facts
+  about what Apple's notary service and AMFI do to this specific payload, and
+  no build has been signed yet.
+
+  (a) NOTARIZATION MAY REJECT THE UNSIGNED `.so` TREE. The notary service walks
+      the whole bundle, not just the paths a build config listed, and it has
+      historically rejected nested Mach-O images that are unsigned or signed
+      without a hardened runtime. If the notary log comes back naming files
+      under `Contents/Resources/python/lib/`, that is this.
+
+      LIKELY FIX: a deep-sign pass over the python payload with our identity
+      before notarize, so every nested image carries OUR Team ID. The useful
+      side effect is that it also settles (b): a deep-signed tree is same-team
+      by construction.
+
+  (b) HARDENED RUNTIME LIBRARY VALIDATION. Library validation requires that any
+      code loaded INTO a process be signed by the same Team ID as the process,
+      or by Apple. `python3` dlopens its C-extension modules at import time,
+      which is precisely the operation that rule governs.
+
+        - If the `.so` files end up signed with OUR identity (via the deep-sign
+          in (a)), they are same-team and validation passes with NO extra
+          entitlement. This file stays at two keys.
+        - If they do NOT get signed same-team, then
+          `com.apple.security.cs.disable-library-validation` becomes REQUIRED,
+          and this file grows a third key.
+
+      Note the process that matters is `python3` itself, spawned as a CHILD:
+      a child carries its own signature, and library validation on the Electron
+      parent has no opinion about it. The entitlement would therefore need to
+      reach python3 via `entitlementsInherit`, which is this same file.
+
+      ⚠ RECORD THE SYMPTOM, because it is the least diagnosable failure in this
+      class. If library validation rejects an extension module, the extractor
+      dies by INSTANT SIGKILL the moment a conversion starts: no error, no
+      dialog, nothing in any log. AN EMPTY LOG IS THE SIGNATURE OF THIS FAILURE.
+      A conversion that "does nothing" on a signed build, and works from source,
+      is this until proven otherwise.
+
+      Do not add the key speculatively to make a SIGKILL go away. With it set,
+      ANY dylib can be loaded into the process, which is a real widening of the
+      attack surface. Establish WHAT got rejected first: `codesign -dv --deep`
+      over `Contents/Resources/python` and `log stream` around the spawn.
+
+  ⚠ THE PREVIOUS VERSION OF THIS FILE ARGUED THE OPPOSITE, and it was wrong
+  about this app. It stated that disable-library-validation was safely absent
+  because the sidecar was "a single executable that WE build and the signer
+  signs under OUR identity", linking nothing outside /usr/lib and /System. That
+  described a DIFFERENT app with a self-built single sidecar. StreamMagpie
+  bundles a third-party interpreter with hundreds of nested Mach-O images that
+  the signer, as configured, never touches. Everything that argument depended on
+  is false here, so the position is an open question rather than a settled
+  absence.
+
+  ==========================================================================
+  DELIBERATELY ABSENT — recorded with evidence so nobody re-adds them blindly
+  ==========================================================================
+
+  com.apple.security.cs.disable-library-validation — ABSENT FOR NOW, pending
+    (b) above. This is the one key whose absence is provisional. It is left out
+    because the deep-sign route makes the payload same-team and is the smaller
+    security concession; add it only with a notary log or a SIGKILL trace that
+    names what was rejected.
+
+  com.apple.security.app-sandbox — ABSENT, and it never gets added.
+
+    StreamMagpie spawns bundled executables (python3, ffmpeg, qjs) and writes
+    audio into a folder the user picks. A sandbox would need a temporary
+    exception for each of those, and sandboxed processes may not spawn
+    arbitrary bundled binaries at all.
+
+    ⚠ THIS FORECLOSES THE MAC APP STORE, permanently and knowingly. The App
+    Store requires the sandbox, and would not accept a YouTube extractor in any
+    case. That is fine: the official build is sold once through Gumroad
+    (docs/DISTRIBUTION.md) and the source is MIT for anyone who would rather
+    build it.
+
+  com.apple.security.cs.allow-dyld-environment-variables — ABSENT.
+
+    The plausible and WRONG argument for it: "the main process sets environment
+    variables before spawning children, and Hardened Runtime strips those unless
+    this is set". `src/main/helper-paths.ts` does exactly that, setting
+    STREAMMAGPIE_PYTHON, STREAMMAGPIE_FFMPEG, STREAMMAGPIE_QJS and friends as an
+    import-time side effect, which the engine reads when it spawns.
+
+    The entitlement governs `DYLD_*` variables ONLY (DYLD_INSERT_LIBRARIES,
+    DYLD_LIBRARY_PATH and the rest) — the dynamic-loader ones dyld ignores under
+    Hardened Runtime precisely because they are a code injection vector.
+    STREAMMAGPIE_* are ordinary environment variables. Ordinary variables are
+    untouched and propagate to child processes normally.
+
+    Checked: `grep -rn "DYLD_" packages/*/src scripts/` returns nothing.
+    [verified: run]
+
+  com.apple.security.network.client — ABSENT, and NOT because the app is
+    offline: it plainly is not. `src/main/extractor-update.ts` fetches the
+    signed extractor manifest, and yt-dlp reaches YouTube for every conversion.
+    This key is a SANDBOX entitlement. An unsandboxed process already has
+    unrestricted outbound network access, so the key grants nothing and would
+    only matter if the sandbox above were ever adopted, which it is not.
+
+  com.apple.security.automation.apple-events — ABSENT.
+
+    "Play" and "Show in Finder" go through Electron's `shell.openPath` and
+    `shell.showItemInFolder`, which are LaunchServices asking the OS to open a
+    path. Neither sends an Apple event, so neither needs this entitlement and
+    neither raises a TCC automation prompt.
+
+  ==========================================================================
+  ONE MORE MECHANISM, OFTEN CONFUSED WITH THIS FILE
+  ==========================================================================
+
+  The NS*UsageDescription strings in `electron-builder.yml` are NOT
+  entitlements. They are per-folder TCC prompt copy (Downloads, Desktop,
+  Documents) that macOS shows when the app first writes into one of those
+  folders, and they fire whether or not any entitlement is present. A missing
+  string there is a silent EPERM at save time, which the app would surface as a
+  conversion that finishes and produces no file.
+
+  Likewise, the TCC identity every one of those grants attaches to is the
+  bundle identifier `co.streammagpie.app`. No plist key requests a TCC grant and
+  no build step can. Change that string and every user's existing grants are
+  orphaned onto an app that no longer exists, which is why AGENTS.md refuses to
+  let it be renamed.
+-->

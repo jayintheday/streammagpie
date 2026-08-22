@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en" data-palette="coral">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: smthumb:;"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StreamMagpie</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-page="home">
+    <header class="topbar">
+      <span class="topbar__brand">StreamMagpie</span>
+    </header>
+    <div id="banner" class="banner" role="alert" hidden></div>
+    <main id="stage" class="listen">
+      <section class="listen__drop">
+        <div class="listen__drop-head">
+          <img
+            class="listen__mascot"
+            src="./assets/streammagpie.webp"
+            width="48"
+            height="48"
+            alt=""
+          />
+          <h1 id="hero-title" class="listen__title">Drop a YouTube link</h1>
+        </div>
+        <p id="hero-hint" class="listen__hint">We’ll preview the track before anything is saved.</p>
+        <form id="url-form" class="listen__url-form">
+          <div class="listen__url-row">
+            <input
+              id="url"
+              class="listen__url"
+              type="text"
+              name="url"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              aria-label="YouTube URL"
+              placeholder="https://www.youtube.com/watch?v=…"
+            />
+            <button id="btn-lookup" class="btn btn--accent" type="submit">Look up</button>
+          </div>
+        </form>
+        <p id="wait-error" class="listen__error" hidden></p>
+      </section>
+
+      <div id="view-lookup" class="listen__lookup" hidden>
+        <div class="listen__lookup-art" aria-hidden="true"></div>
+        <div>
+          <p class="listen__lookup-kicker">Looking up</p>
+          <p class="listen__lookup-copy">Fetching the sleeve for this track…</p>
+        </div>
+      </div>
+
+      <div id="just-saved" class="listen__saved" hidden>
+        <img id="saved-art" class="listen__saved-art" alt="" />
+        <div class="listen__saved-copy">
+          <p class="listen__saved-kicker">Saved</p>
+          <p id="saved-title" class="listen__saved-title"></p>
+          <p id="saved-meta" class="listen__saved-meta"></p>
+          <div class="listen__actions">
+            <button id="btn-saved-play" class="btn btn--accent" type="button">Play</button>
+            <button id="btn-saved-finder" class="btn" type="button">Show in Finder</button>
+          </div>
+        </div>
+      </div>
+
+      <section id="view-confirm" class="listen__card" hidden>
+        <img id="sleeve-art" class="sleeve__art" alt="" />
+        <div class="sleeve__body">
+          <h2 id="sleeve-title" class="sleeve__title"></h2>
+          <p id="sleeve-meta" class="sleeve__meta"></p>
+          <p id="mix-notice" class="sleeve__mix" hidden>This is from a mix. We’ll save this track.</p>
+          <div class="listen__actions">
+            <button id="btn-pull" class="btn btn--accent" type="button">Save</button>
+            <button id="btn-dismiss" class="btn" type="button">Discard</button>
+          </div>
+        </div>
+      </section>
+      <section id="view-pulling" class="listen__card" hidden>
+        <img id="pull-art" class="sleeve__art" alt="" />
+        <div class="sleeve__body">
+          <h2 id="pull-title" class="sleeve__title"></h2>
+          <p id="pull-line" class="sleeve__meta">Saving audio…</p>
+          <progress id="pull-bar" max="100"></progress>
+          <button id="btn-stop" class="btn" type="button">Stop</button>
+        </div>
+      </section>
+      <section id="view-landed" class="listen__card" hidden>
+        <img id="land-art" class="sleeve__art" alt="" />
+        <div class="sleeve__body">
+          <h2 id="land-title" class="sleeve__title"></h2>
+          <p id="land-line" class="sleeve__meta"></p>
+          <p id="land-error" class="listen__error" hidden></p>
+          <details id="land-details" hidden>
+            <summary>Details</summary>
+            <pre id="land-detail-text" class="listen__pre"></pre>
+          </details>
+          <div id="land-ok-actions" class="listen__actions">
+            <button id="btn-play" class="btn btn--accent" type="button">Play</button>
+            <button id="btn-finder" class="btn" type="button">Show in Finder</button>
+            <button id="btn-rename" class="btn" type="button">Rename</button>
+          </div>
+          <div id="land-err-actions" class="listen__actions" hidden>
+            <button id="btn-retry" class="btn btn--accent" type="button">Try again</button>
+            <button id="btn-another" class="btn" type="button">Drop another</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="recents">
+        <p class="section-label">Recent</p>
+        <ul id="history-list" class="sleeves"></ul>
+      </section>
+    </main>
+    <footer class="listen__foot">
+      <button id="foot-folder" class="listen__foot-btn" type="button">
+        <svg class="listen__foot-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+          <polyline points="17 21 17 13 7 13 7 21" />
+          <polyline points="7 3 7 8 15 8" />
+        </svg>
+        <span id="foot-folder-label">Saving to Desktop</span>
+      </button>
+      <div id="foot-palettes" class="listen__palettes" role="radiogroup" aria-label="Color palette">
+        <button class="listen__swatch" type="button" role="radio" data-palette="coral" aria-label="Coral"></button>
+        <button class="listen__swatch" type="button" role="radio" data-palette="midnight" aria-label="Midnight"></button>
+        <button class="listen__swatch" type="button" role="radio" data-palette="deep-ocean" aria-label="Deep Ocean"></button>
+        <button class="listen__swatch" type="button" role="radio" data-palette="lavender-haze" aria-label="Lavender Haze"></button>
+        <button class="listen__swatch" type="button" role="radio" data-palette="sunset-dreams" aria-label="Sunset Dreams"></button>
+      </div>
+      <button id="foot-format" class="listen__foot-btn" type="button">
+        <svg class="listen__foot-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+          />
+        </svg>
+        <span id="foot-format-label">Best quality · m4a</span>
+      </button>
+    </footer>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

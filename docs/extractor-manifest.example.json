@@ -1,0 +1,8 @@
+{
+  "ytdlp_version": "2026.08.19",
+  "wheel_url": "https://github.com/jayintheday/streammagpie/releases/download/extractor-2026.08.19/yt_dlp-2026.8.19-py3-none-any.whl",
+  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "client_chain": ["visionos", "tv", "web_embedded", "android_vr"],
+  "extractor_args": {},
+  "notice": null
+}

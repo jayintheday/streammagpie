@@ -1,0 +1,120 @@
+/**
+ * Named palettes — alternate canvases for one design system.
+ *
+ * :root in tokens.css is Coral, the StreamMagpie default. Each block below
+ * repaints the app by overriding only the surface, line and text ramps plus the
+ * single accent; everything else (space, radii, type, motion, elevation) stays
+ * exactly as tokens.css defines it. So a palette can change the app's COLOUR
+ * and nothing else — never its layout, rhythm or voice.
+ *
+ * The `.listen__swatch` rules at the foot paint the picker's dots. Keep each
+ * swatch in step with its palette's `--accent` or the dot starts lying.
+ */
+
+[data-palette='midnight'] {
+  --surface-0: #0d1117;
+  --surface-1: #161b22;
+  --surface-2: #1e2530;
+  --surface-3: #252d3a;
+  --surface-chrome: #11161d;
+  --surface-sidebar: #121820;
+  --surface-mascot: #141a22;
+  --surface-art: #1e2530;
+  --surface-accent-tint: color-mix(in srgb, var(--accent) 12%, var(--surface-0));
+  --surface-0-deep: #0a0e13;
+  --surface-chrome-deep: #0e1319;
+  --line-faint: rgb(226 232 240 / 0.06);
+  --line: rgb(226 232 240 / 0.075);
+  --line-strong: rgb(226 232 240 / 0.11);
+  --text: #e2e8f0;
+  --text-2: #cbd5e1;
+  --text-dim: #94a3b8;
+  --text-muted: #7b8a9e;
+  --text-faint: #64748b;
+  --accent: #94a3b8;
+}
+
+[data-palette='deep-ocean'] {
+  --surface-0: #050e1a;
+  --surface-1: #0a1628;
+  --surface-2: #0f2040;
+  --surface-3: #152a4c;
+  --surface-chrome: #071220;
+  --surface-sidebar: #08162a;
+  --surface-mascot: #071220;
+  --surface-art: #0f2040;
+  --surface-accent-tint: color-mix(in srgb, var(--accent) 12%, var(--surface-0));
+  --surface-0-deep: #040b14;
+  --surface-chrome-deep: #06101c;
+  --line-faint: rgb(186 230 253 / 0.06);
+  --line: rgb(186 230 253 / 0.075);
+  --line-strong: rgb(186 230 253 / 0.11);
+  --text: #e0f2fe;
+  --text-2: #bae6fd;
+  --text-dim: #94a9bd;
+  --text-muted: #7a93ab;
+  --text-faint: #5d7590;
+  --accent: #38bdf8;
+}
+
+[data-palette='lavender-haze'] {
+  --surface-0: #16131e;
+  --surface-1: #221a2e;
+  --surface-2: #302540;
+  --surface-3: #3a2e4c;
+  --surface-chrome: #1c1828;
+  --surface-sidebar: #1d1728;
+  --surface-mascot: #1c1626;
+  --surface-art: #302540;
+  --surface-accent-tint: color-mix(in srgb, var(--accent) 12%, var(--surface-0));
+  --surface-0-deep: #110f18;
+  --surface-chrome-deep: #181422;
+  --line-faint: rgb(240 232 255 / 0.06);
+  --line: rgb(240 232 255 / 0.075);
+  --line-strong: rgb(240 232 255 / 0.11);
+  --text: #f0e8ff;
+  --text-2: #e0d4f5;
+  --text-dim: #a89bb8;
+  --text-muted: #8c809e;
+  --text-faint: #6f6480;
+  --accent: #b48ee0;
+}
+
+[data-palette='sunset-dreams'] {
+  --surface-0: #1e1318;
+  --surface-1: #2c1a22;
+  --surface-2: #3d2530;
+  --surface-3: #482c38;
+  --surface-chrome: #24161c;
+  --surface-sidebar: #26171e;
+  --surface-mascot: #24151c;
+  --surface-art: #3d2530;
+  --surface-accent-tint: color-mix(in srgb, var(--accent) 12%, var(--surface-0));
+  --surface-0-deep: #160e12;
+  --surface-chrome-deep: #1c1218;
+  --line-faint: rgb(255 232 240 / 0.06);
+  --line: rgb(255 232 240 / 0.075);
+  --line-strong: rgb(255 232 240 / 0.11);
+  --text: #ffe8f0;
+  --text-2: #f5d0dc;
+  --text-dim: #c0a0aa;
+  --text-muted: #a48690;
+  --text-faint: #8a6f78;
+  --accent: #f07ba0;
+}
+
+.listen__swatch[data-palette='coral'] {
+  --swatch: #e85d4c;
+}
+.listen__swatch[data-palette='midnight'] {
+  --swatch: #94a3b8;
+}
+.listen__swatch[data-palette='deep-ocean'] {
+  --swatch: #38bdf8;
+}
+.listen__swatch[data-palette='lavender-haze'] {
+  --swatch: #b48ee0;
+}
+.listen__swatch[data-palette='sunset-dreams'] {
+  --swatch: #f07ba0;
+}

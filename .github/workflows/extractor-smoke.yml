@@ -1,0 +1,51 @@
+# Daily extractor gate. Publishes wheels only — never the app DMG.
+name: extractor-smoke
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  smoke:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Stable wheel
+        run: |
+          python -m pip download yt-dlp -d /tmp/wheels --no-deps
+          WHL=$(ls -t /tmp/wheels/yt_dlp-*.whl | head -1)
+          echo "WHEEL=$WHL" >> "$GITHUB_ENV"
+          echo "STABLE_VER=$(basename "$WHL")" >> "$GITHUB_ENV"
+      - name: Smoke stable
+        id: stable
+        continue-on-error: true
+        env:
+          WHEEL: ${{ env.WHEEL }}
+          PYTHONPATH: ${{ env.WHEEL }}
+        run: bash scripts/extractor-smoke.sh
+      - name: Nightly fallback
+        if: steps.stable.outcome != 'success'
+        run: |
+          python -m pip index versions yt-dlp || true
+          python -m pip download -i https://pypi.org/simple yt-dlp -d /tmp/nightly --pre --no-deps || \
+            echo "No pre-release; leave stable failed"
+          WHL=$(ls -t /tmp/nightly/yt_dlp-*.whl 2>/dev/null | head -1 || true)
+          if [[ -z "$WHL" ]]; then exit 1; fi
+          PYTHONPATH="$WHL" bash scripts/extractor-smoke.sh
+          echo "WHEEL=$WHL" >> "$GITHUB_ENV"
+      - name: Publish wheel only
+        if: github.repository == 'jayintheday/streammagpie'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Requires EXTRACTOR_SIGNING_KEY secret for a real signature. Without it, skip upload.
+          if [[ -z "${EXTRACTOR_SIGNING_KEY:-}" ]]; then
+            echo "No EXTRACTOR_SIGNING_KEY; smoke passed locally to logs only."
+            exit 0
+          fi
+          SHA=$(shasum -a 256 "$WHEEL" | awk '{print $1}')
+          echo "Would upload $(basename "$WHEEL") sha256=$SHA — wire minisign/ed25519 here."
