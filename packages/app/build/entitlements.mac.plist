@@ -93,104 +93,159 @@
   Silence and exit 0 means this file is good. Add `-d --entitlements -` on the
   probe afterwards to see exactly which keys got embedded.
 
-  ⚠ NOT RUN AGAINST A REAL CODESIGN YET. Signing needs the user's keychain and
-  is the release operator's step; this file has never been handed to a real
-  codesign. The static guard in `test/app-paths.test.ts` ("entitlements
-  comments above plist have no double hyphen") stands in for it until then, and
-  it is a string assertion doing a parser's job on purpose.
+  RUN AGAINST A REAL CODESIGN, AND IT PASSED. The recipe above was executed
+  verbatim on 2026-08-23 against the real Developer ID: exit 0, silent, no AMFI
+  fault. `codesign -d --entitlements -` on the probe afterwards printed exactly
+  two keys, allow-jit and allow-unsigned-executable-memory, and nothing else.
+  The full signed build that followed raised no entitlements error either.
+  [verified: run 2026-08-23]
+
+  ⚠ THAT RESULT DOES NOT RETIRE THE TRAP. The fault is a property of whatever
+  comment text this file carries TODAY, so every edit re-earns it. The static
+  guard in `test/app-paths.test.ts` ("entitlements comments above plist have no
+  double hyphen") still runs on every gate, and it is a string assertion doing a
+  parser's job on purpose. Run the probe again after any edit above the closing
+  tag: one second, against a nine-minute build.
 
   ==========================================================================
-  WHAT THIS APP ACTUALLY BUNDLES — the thing the open questions below turn on
+  WHAT THIS APP ACTUALLY BUNDLES — the thing the questions below turned on
   ==========================================================================
 
   StreamMagpie's payload is THIRD-PARTY SIDECARS, not code we compiled. Under
   `Contents/Resources`, from `extraResources` in electron-builder.yml:
 
-    python/    a full CPython runtime from python-build-standalone. That is
-               `python/bin/python3` PLUS a `python/lib/` tree containing a
-               `libpython3.x.dylib` and many Mach-O `.so` C-extension modules
-               (lib-dynload: _ssl, _socket, _hashlib, binascii, and the rest).
-               [inferred: the tree is gitignored and absent from a fresh clone;
-               layout is python-build-standalone's documented install_only
-               layout, fetched by scripts/vendor-python.sh]
+    python/    a full CPython 3.12.14 runtime from python-build-standalone.
+               That is `python/bin/python3` PLUS a `python/lib/` tree carrying
+               exactly TEN further Mach-O images: `libpython3.12.dylib`, six
+               Tcl/Tk dylibs (libtcl9.0, libtcl9tk9.0, libitcl4.3.8,
+               libtcl9itcl4.3.8, libthread3.0.6, libtcl9thread3.0.6) and THREE
+               `lib-dynload/*.so` extension modules (_crypt, _dbm, _tkinter).
+               Ten, not hundreds, and not the ones this file used to name:
+               _ssl, _socket, _hashlib and binascii are STATICALLY LINKED into
+               libpython in this distribution and are not separate files at all.
+               [verified: run 2026-08-23, counted in the shipped bundle]
     ffmpeg/    static LGPL `ffmpeg` and `ffprobe` built by scripts/build-ffmpeg.sh
     js/        `qjs`, the QuickJS interpreter yt-dlp drives for n-sig
     ytdlp/     the floor `yt_dlp.whl`. Data, not Mach-O. Not a signing concern.
 
-  ⚠ `mac.binaries` NAMES ONLY THE FOUR LOOSE EXECUTABLES: ffmpeg, ffprobe,
-  js/qjs, python/bin/python3. It is a LIST, not a directory walk. Nothing under
-  `python/lib/` is in it, so as configured today electron-builder signs neither
-  the libpython dylib nor a single `.so`. They ship exactly as downloaded,
-  carrying whatever signature python-build-standalone gave them (in practice
-  ad-hoc), which is a DIFFERENT team from ours.
+  `mac.binaries` names only the four loose executables: ffmpeg, ffprobe, js/qjs,
+  python/bin/python3. It is a LIST, and what it guarantees is that those four are
+  signed WITH THE ENTITLEMENTS ABOVE, by name.
+
+  ⚠ IT IS NOT THE ONLY THING THAT SIGNS, AND THIS FILE USED TO CLAIM IT WAS.
+  The old claim was that anything not on the list ships unsigned, carrying
+  whatever ad-hoc signature the upstream distribution gave it. FALSE for
+  electron-builder 26.15.3. The build log shows the list handled first, as
+  `signing additional user-defined binaries`, and then a SEPARATE
+  `signing file=release/mac-arm64/StreamMagpie.app` step that walks the finished
+  bundle recursively. All 14 Mach-O images in the shipped app came out with
+  `Authority=Developer ID Application: Intheday Ltd (29UYFH4USR)`,
+  `TeamIdentifier=29UYFH4USR` and `flags=0x10000(runtime)` — the ten under
+  `Contents/Resources/python/lib/` that the list never names included.
+  [verified: run 2026-08-23]
+
+  That is not a footnote. The false belief was the entire basis of both
+  questions below, and of a deep-sign pass they prescribed that turns out to be
+  work electron-builder already does.
+
+  ⚠ DO NOT DELETE `mac.binaries` ON THE STRENGTH OF THIS. It is what pins these
+  entitlements onto those four by name, and whether removing it would change any
+  of the 14 signatures has not been tested. [inferred]
 
   ==========================================================================
-  TWO OPEN QUESTIONS — [inferred], and only the first signed build settles them
+  TWO QUESTIONS, BOTH ANSWERED BY THE FIRST SIGNED BUILD — 2026-08-23
   ==========================================================================
 
-  Both are honest unknowns. Neither can be resolved by reading: they are facts
-  about what Apple's notary service and AMFI do to this specific payload, and
-  no build has been signed yet.
+  Both were honest unknowns, and both rested on the claim corrected above.
+  Neither could be resolved by reading; the first signed, notarized and stapled
+  build resolved both, and the answer to each is no.
 
-  (a) NOTARIZATION MAY REJECT THE UNSIGNED `.so` TREE. The notary service walks
-      the whole bundle, not just the paths a build config listed, and it has
-      historically rejected nested Mach-O images that are unsigned or signed
-      without a hardened runtime. If the notary log comes back naming files
-      under `Contents/Resources/python/lib/`, that is this.
+  (a) DOES NOTARIZATION REJECT THE `.so` TREE? NO — and NOT because Apple was
+      lenient. That distinction is the whole finding. Apple's tolerance was
+      never tested, because there was nothing unsigned left to object to:
+      electron-builder's recursive pass over the finished `.app` had already
+      signed every nested image with our Developer ID under the hardened
+      runtime, so the submission carried no foreign-team and no ad-hoc Mach-O
+      at all. The build logged `notarization successful` once, the `.app` came
+      back reporting `Notarization Ticket=stapled`, and
+      `codesign --verify --deep --strict` called it "valid on disk" and said it
+      "satisfies its Designated Requirement". [verified: run 2026-08-23]
 
-      LIKELY FIX: a deep-sign pass over the python payload with our identity
-      before notarize, so every nested image carries OUR Team ID. The useful
-      side effect is that it also settles (b): a deep-signed tree is same-team
-      by construction.
+      The deep-sign pass this section used to prescribe is therefore NOT needed.
+      It was the right fix for the problem as understood; the problem does not
+      exist.
 
-  (b) HARDENED RUNTIME LIBRARY VALIDATION. Library validation requires that any
-      code loaded INTO a process be signed by the same Team ID as the process,
-      or by Apple. `python3` dlopens its C-extension modules at import time,
-      which is precisely the operation that rule governs.
+  (b) DOES LIBRARY VALIDATION KILL CPython's `dlopen`? NO, and this was tested
+      directly rather than inferred from (a). Library validation requires that
+      any code loaded INTO a process be signed by the same Team ID as the
+      process, or by Apple. `python3` dlopens its C-extension modules at import
+      time, which is precisely the operation that rule governs. So the imports
+      were run, from the app installed into /Applications, under the hardened
+      runtime it shipped with, with this file still at two keys:
 
-        - If the `.so` files end up signed with OUR identity (via the deep-sign
-          in (a)), they are same-team and validation passes with NO extra
-          entitlement. This file stays at two keys.
-        - If they do NOT get signed same-team, then
-          `com.apple.security.cs.disable-library-validation` becomes REQUIRED,
-          and this file grows a third key.
+          python3 --version
+              Python 3.12.14, exit 0
+
+          python3 -c 'import ssl, zlib, ctypes, sqlite3, hashlib, bz2, lzma,
+                      socket, binascii'
+              all C extensions imported OK, exit 0
+
+          PYTHONPATH=<floor wheel> python3 -c 'import yt_dlp'
+              yt_dlp 2026.08.19 loaded, exit 0
+
+      No SIGKILL, no empty log, no dialog. Same team throughout, so both
+      branches of the rule are satisfied and no exception is needed.
+      [verified: run 2026-08-23]
 
       Note the process that matters is `python3` itself, spawned as a CHILD:
       a child carries its own signature, and library validation on the Electron
-      parent has no opinion about it. The entitlement would therefore need to
-      reach python3 via `entitlementsInherit`, which is this same file.
+      parent has no opinion about it. Any entitlement would therefore have had
+      to reach python3 via `entitlementsInherit`, which is this same file. It
+      did not need to.
 
-      ⚠ RECORD THE SYMPTOM, because it is the least diagnosable failure in this
-      class. If library validation rejects an extension module, the extractor
-      dies by INSTANT SIGKILL the moment a conversion starts: no error, no
-      dialog, nothing in any log. AN EMPTY LOG IS THE SIGNATURE OF THIS FAILURE.
-      A conversion that "does nothing" on a signed build, and works from source,
-      is this until proven otherwise.
+      ⚠ KEEP THE SYMPTOM ON RECORD ANYWAY. It is the least diagnosable failure
+      in this class, and a payload change can reintroduce it. If library
+      validation ever rejects an extension module, the extractor dies by INSTANT
+      SIGKILL the moment a conversion starts: no error, no dialog, nothing in
+      any log. AN EMPTY LOG IS THE SIGNATURE OF THIS FAILURE. A conversion that
+      "does nothing" on a signed build, and works from source, is this until
+      proven otherwise.
 
       Do not add the key speculatively to make a SIGKILL go away. With it set,
       ANY dylib can be loaded into the process, which is a real widening of the
       attack surface. Establish WHAT got rejected first: `codesign -dv --deep`
       over `Contents/Resources/python` and `log stream` around the spawn.
 
-  ⚠ THE PREVIOUS VERSION OF THIS FILE ARGUED THE OPPOSITE, and it was wrong
-  about this app. It stated that disable-library-validation was safely absent
-  because the sidecar was "a single executable that WE build and the signer
-  signs under OUR identity", linking nothing outside /usr/lib and /System. That
-  described a DIFFERENT app with a self-built single sidecar. StreamMagpie
-  bundles a third-party interpreter with hundreds of nested Mach-O images that
-  the signer, as configured, never touches. Everything that argument depended on
-  is false here, so the position is an open question rather than a settled
-  absence.
+  ⚠ THIS FILE HAS NOW BEEN WRONG TWICE ABOUT THE SAME KEY, IN OPPOSITE
+  DIRECTIONS, AND BOTH WRONG TURNS ARE WORTH KEEPING. The earliest version
+  argued disable-library-validation was safely absent because the sidecar was
+  "a single executable that WE build and the signer signs under OUR identity",
+  linking nothing outside /usr/lib and /System. Right conclusion, but from a
+  description of a DIFFERENT app: StreamMagpie bundles a third-party
+  interpreter, not a self-built sidecar. The version that replaced it fixed the
+  payload description and then overcorrected, reopening the question on the
+  strength of the "mac.binaries is the only thing that signs" claim that the
+  first real build disproved. The absence is settled again, and this time on
+  observed reasons rather than reasoned ones: everything in the bundle is
+  signed, it is all one team, and the imports were actually run.
 
   ==========================================================================
   DELIBERATELY ABSENT — recorded with evidence so nobody re-adds them blindly
   ==========================================================================
 
-  com.apple.security.cs.disable-library-validation — ABSENT FOR NOW, pending
-    (b) above. This is the one key whose absence is provisional. It is left out
-    because the deep-sign route makes the payload same-team and is the smaller
-    security concession; add it only with a notary log or a SIGKILL trace that
-    names what was rejected.
+  com.apple.security.cs.disable-library-validation — ABSENT, and no longer
+    provisionally so. The bundled interpreter imports its C extensions under the
+    hardened runtime it shipped with, from the app installed in /Applications,
+    with this key not present: `import ssl, zlib, ctypes, sqlite3, hashlib, bz2,
+    lzma, socket, binascii` exits 0, and so does `import yt_dlp` off the floor
+    wheel. Library validation is satisfied because electron-builder signs the
+    whole nested tree under our own Team ID. See (b) above.
+    [verified: run 2026-08-23]
+
+    ⚠ Still do not add it speculatively. With it set, ANY dylib can be loaded
+    into the process. That evidence is about THIS payload on THIS build, not a
+    standing guarantee: if a future payload arrives pre-signed by another team,
+    or a SIGKILL with an empty log appears, establish what was rejected first.
 
   com.apple.security.app-sandbox — ABSENT, and it never gets added.
 

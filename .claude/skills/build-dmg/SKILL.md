@@ -13,10 +13,18 @@ pushes. The upload leg is [`.claude/skills/ship-gumroad`](../ship-gumroad/SKILL.
 and it re-runs its own gates against whatever this one produces — as it should,
 since the two legs can be separated by days.
 
-The policy behind every step is `docs/DISTRIBUTION.md`. Read its
-"What has not been proven" section before starting: **none of this has ever been
-run for this project**, so the first time through, treat a failure as information
-rather than as a mistake.
+The policy behind every step is `docs/DISTRIBUTION.md`. **This pipeline ran end
+to end for the first time on 2026-08-23 and produced a signed, notarized,
+stapled `StreamMagpie-0.1.0-arm64.dmg`** — notary submission
+`b3b32e8f-778d-4e50-80b9-1ad3f5f37023`, Accepted. `[verified: run 2026-08-23]`
+So the steps below are a record, not a plan.
+
+⚠ **That is one artefact, not a proven pipeline.** Two stages fail open and the
+exit code does not tell you; nothing signs, notarizes or staples by inheritance;
+and every gate here is re-earned per build. Read
+`docs/DISTRIBUTION.md` → "What has not been proven" before reporting anything as
+finished — in particular the app's own GUI flow has never been exercised, and
+nothing has been checked on a clean Mac.
 
 ## Constants
 
@@ -91,9 +99,12 @@ the failure does not name the reason.
    ```bash
    xcrun notarytool history --keychain-profile streammagpie
    ```
-   If it does not exist, stop and run the one-time `store-credentials` step in
-   `docs/DISTRIBUTION.md` → "Before the first ship, once". ⚠ The Apple ID that
-   works is **not** the git-committer address.
+   It was created on 2026-08-23 and resolved unattended for both the inline app
+   notarization and the DMG pass in the same run. `[verified: run 2026-08-23]`
+   If it does not exist on the machine you are on, stop and run the one-time
+   `store-credentials` step in `docs/DISTRIBUTION.md` → "Before the first ship,
+   once". ⚠ The Apple ID that works is **not** the git-committer address, and it
+   is not written down in this repo anywhere — ask.
 
 ## Step 2 — Build
 
@@ -112,6 +123,14 @@ names are one character apart.
 that forgets the variable signs with whatever Developer ID electron-builder
 auto-discovers — or, on a machine with none, produces an unsigned bundle and a
 `skipped macOS notarization` WARN, exit code 0.
+
+**Expect roughly nine minutes**, inline app notarization included: on 2026-08-23
+the app ran 13:47 to 13:56 and the DMG was written at 14:00.
+`[verified: run 2026-08-23]` Most of that is Apple's notary queue, so it is not a
+stable number — but a run that finishes in two minutes has the shape of one that
+skipped notarization, which is what step 3's first grep catches. An expectation
+of twenty minutes carried over from a sibling project belongs to a bigger
+payload, not this one.
 
 The `tee` is not optional: step 3 has nothing to read without it.
 
@@ -199,6 +218,10 @@ ls "$RES/ytdlp"/yt_dlp*.whl
 codesign -dvv "$RES/ffmpeg/ffmpeg"      2>&1 | grep -E "Authority|TeamIdentifier"
 codesign -dvv "$RES/python/bin/python3" 2>&1 | grep -E "Authority|TeamIdentifier"
 
+# the nested tree mac.binaries does NOT name — signed by the recursive pass
+find "$RES/python" -type f \( -name '*.so' -o -name '*.dylib' \) \
+  -exec codesign -dvv {} \; 2>&1 | grep -c "TeamIdentifier=29UYFH4USR"   # want 10
+
 # f — the icon, read from the MOUNTED app
 shasum -a 256 "$MP/StreamMagpie.app/Contents/Resources/icon.icns"
 
@@ -207,6 +230,19 @@ hdiutil detach "$MP" -quiet
 
 ⚠ `-dvv` needs **two** v's. At `-dv` the Authority lines are not printed at all,
 which reads exactly like an unsigned binary when it is merely under-verbose.
+
+⚠ **Every Mach-O in the bundle should come back signed, not just the four
+`mac.binaries` names — and this skill used to say the opposite.**
+electron-builder 26.15.3 signs the named list with the entitlements
+(`signing additional user-defined binaries`) and then makes a **separate
+recursive pass** over the finished `.app`
+(`signing file=release/mac-arm64/StreamMagpie.app`). On 2026-08-23 all **14**
+Mach-O images carried `Authority=Developer ID Application: Intheday Ltd
+(29UYFH4USR)`, `TeamIdentifier=29UYFH4USR` and `flags=0x10000(runtime)`,
+including the ten under `Contents/Resources/python/lib/` (libpython3.12, six
+Tcl/Tk dylibs, three `lib-dynload/*.so`). `[verified: run 2026-08-23]` A nested
+image that comes back **unsigned** is therefore a regression to investigate, not
+the expected state.
 
 ⚠ `spctl` and `stapler validate` both fall back to an **online** ticket lookup,
 so a pass proves *notarized*, not necessarily *stapled*. Only a machine with
@@ -258,7 +294,8 @@ placeholders.
 | `codesign -dvv "$DMG"` says not signed | `scripts/sign-dmg.sh` was not run, or was run before the DMG existed |
 | `spctl` rejects a stapled DMG | it was re-signed after stapling — signing invalidates the ticket. Rebuild the pass in order: sign, notarize, staple |
 | MP3 conversion fails while m4a works | the vendored ffmpeg has no `libmp3lame`; the step 1 grep is where this is meant to be caught |
-| a payload has no `Authority` line | `mac.binaries` does not name it — a loose Mach-O in `Resources` is not walked and re-signed like a nested bundle |
-| notarization **Invalid**, log names `python/**/lib-dynload/*.so` | hypothesis (a) in `docs/DISTRIBUTION.md` → "What has not been proven": the CPython tree's nested Mach-Os were never signed. The fix is a deep-sign pass over `Contents/Resources/python`, innermost first — **not** an entitlement |
-| the packaged app dies by **instant SIGKILL** when Python starts, nothing in any log | hypothesis (b): hardened-runtime library validation against CPython's `dlopen`ed C extensions. **An empty log is the signature.** Establish what got rejected before adding `com.apple.security.cs.disable-library-validation` to `packages/app/build/entitlements.mac.plist` — the deep-sign pass is the narrower fix and makes the entitlement unnecessary |
+| a payload has no `Authority` line | a **regression**, not the norm — and the opposite of what this table used to say. electron-builder 26.15.3 signs the `mac.binaries` list with the entitlements and then makes a separate recursive pass over the whole `.app`; on 2026-08-23 all 14 Mach-Os came back on team `29UYFH4USR`. An unsigned one means that pass did not reach it: check the file was inside the `.app` at signing time, and that step 3's greps were clean |
+| notarization **Invalid**, log names `python/**/lib-dynload/*.so` | **did not happen on 2026-08-23** — electron-builder's recursive pass had already signed the whole nested tree, so the submission contained nothing unsigned to reject (`docs/DISTRIBUTION.md` → "The two risk hypotheses"). If it happens anyway, that pass did not run or did not reach those files: look for `signing file=release/mac-arm64/StreamMagpie.app` in the log. A manual deep-sign over `Contents/Resources/python`, innermost first, is the fallback — **not** an entitlement |
+| the packaged app dies by **instant SIGKILL** when Python starts, nothing in any log | hardened-runtime library validation against CPython's `dlopen`ed C extensions. **Did not happen on 2026-08-23**: from the installed hardened-runtime app, the bundled interpreter imported ssl, zlib, ctypes, sqlite3, hashlib, bz2, lzma, socket and binascii, exit 0, and loaded yt_dlp off the floor wheel. But a payload change can reintroduce it and **an empty log is still the signature.** Establish what got rejected before adding `com.apple.security.cs.disable-library-validation` to `packages/app/build/entitlements.mac.plist` — a same-team signature is the narrower fix and makes the entitlement unnecessary |
+| the app runs from `/private/var/folders/.../AppTranslocation/<uuid>/d/StreamMagpie.app` instead of `/Applications`, and `process.resourcesPath` points somewhere nobody installed to | **not a fault.** While the quarantine attribute is present macOS translocates the bundle, executing it from a randomized read-only copy. Observed on 2026-08-23; the app launched and ran fine there. `xattr -cr` on the installed bundle clears the attribute and it then runs from `/Applications` proper, signature intact (`codesign --verify --strict` still passes). Do not chase this as a path bug, and do not clear quarantine to make a Gatekeeper check pass — that check *is* the quarantine |
 | `AMFIUnserializeXML: syntax error near line N` at signing | a literal double hyphen inside an XML comment in `packages/app/build/entitlements.mac.plist`. `plutil -lint` cannot catch it; the line number is accurate |

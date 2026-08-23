@@ -63,9 +63,12 @@ identifier, and so is the notarization ticket. **Changing it orphans every one
 of them**: the user's existing permission stays attached to an app that no
 longer exists, and the renamed one appears unpermitted with no explanation.
 It is not a string to tidy, prefix, namespace, or align with anything. It never
-changes. **[inferred]** — reasoned from the TCC model and the usage-description
-keys in `extendInfo`; not observed on a packaged build, because there has not
-been one.
+changes. The shipped bundle carries it: `codesign` on the signed, notarized
+`.app` reports `Identifier=co.streammagpie.app`. `[verified: run 2026-08-23]`
+The *consequence* of changing it is still **[inferred]** — reasoned from the TCC
+model and the usage-description keys in `extendInfo`. No folder grant has been
+asked for yet, because the app's save flow has not been exercised through its
+own UI.
 
 **The signing identity is not committed.** `packages/app/electron-builder.yml`
 carries no `mac.identity` key; official builds pass it in the environment as
@@ -150,9 +153,10 @@ Every claim in a document, a commit message or a report carries how it is known:
 | `[inferred]` | Reasoned, not checked |
 
 **An inferred claim that reads like a verified one costs somebody a day.** It
-matters unusually much here, for two reasons. Nothing in this repo has been
-packaged, signed, notarized or launched, so almost every statement about the
-shipped app is currently an inference and must say so. And the half that *can*
+matters unusually much here, for two reasons. Exactly one build has been
+packaged, signed, notarized, stapled and launched — 2026-08-23 — so a statement
+about the shipped app is either a claim about that single dated artefact or an
+inference, and the difference is not decoration. And the half that *can*
 be run is time-sensitive: a client chain that extracted audio last week can be
 dead today, so "it works" without a date is not a claim, it is a mood. Date the
 runs.
@@ -294,10 +298,20 @@ to be survivable without a reinstall.
 
 ## Packaging
 
-**Nothing here is proven.** The app has never been built, never been signed,
-never been notarized, and the packaged app has never been launched. Every
-statement in this section is `[inferred]` until somebody runs it and replaces it
-with what actually happened, including whatever it learns the hard way.
+**This ran, once, on 2026-08-23.** The app was built, signed, notarized, stapled
+and launched: `StreamMagpie-0.1.0-arm64.dmg`, 173,500,067 bytes, notary
+submission `b3b32e8f-778d-4e50-80b9-1ad3f5f37023` **Accepted**, and Gatekeeper
+returning `accepted / source=Notarized Developer ID` from a copy carrying a
+quarantine attribute. `[verified: run 2026-08-23]` The record, including the two
+risk hypotheses that run disproved and the belief about `mac.binaries` that it
+corrected, is [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
+
+⚠ **One green build is not a proven pipeline. It is one artefact.** Every rebuild
+re-earns every gate below, because two of the build's stages fail open and
+neither the exit code nor the previous success says anything about this one. And
+what that build did *not* cover is the half a customer sees: the app's own GUI
+flow has never been exercised, and nothing has been checked on a clean Mac. Those
+remain `[inferred]`.
 
 The sequence is in [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md), driven by
 `.claude/skills/build-dmg`; the upload leg is separate and is
@@ -336,7 +350,53 @@ Focus the message on **why**, not what.
 
 ---
 
+## Status — 2026-08-23
+
+**The first signed, notarized, stapled DMG exists.**
+`packages/app/release/StreamMagpie-0.1.0-arm64.dmg`, 173,500,067 bytes (165 MB),
+built with electron-builder 26.15.3 and Electron 43.4.0 on macOS 26.5. Notary
+submission `b3b32e8f-778d-4e50-80b9-1ad3f5f37023` came back **Accepted**,
+`stapler validate` passes, and `spctl` returns
+`accepted / source=Notarized Developer ID` from a copy carrying a hand-written
+quarantine attribute. Roughly nine minutes end to end. The three fail-open greps
+came out 0, 0, 1. `[verified: run 2026-08-23]`
+
+The `streammagpie` keychain profile now exists on the maintainer's machine and
+resolved unattended for both the inline app notarization and the DMG pass. Which
+Apple ID it was created with is recorded nowhere in this repo, per the
+distribution policy.
+
+**One belief this repo held in three places was false, and it was load-bearing.**
+`mac.binaries` is *not* the only thing electron-builder signs: it signs those
+four with the entitlements, by name, and then makes a **separate recursive pass**
+over the finished `.app`. All 14 Mach-Os in the shipped bundle carry our
+Developer ID, our Team ID and `flags=0x10000(runtime)` — the ten under
+`Contents/Resources/python/lib/` included. That belief was the basis of both
+packaging risk hypotheses, and both are now disproven: the nested tree was never
+unsigned, so the notary had nothing to reject, and the bundled interpreter
+imports its C extensions under the hardened runtime without
+`disable-library-validation`, which stays absent.
+[`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) and
+`packages/app/build/entitlements.mac.plist` carry the evidence.
+
+**Still not done, and it is the interesting half.** The app's own GUI flow has
+never been exercised — no URL pasted into the running app, no sleeve preview
+seen, nothing saved through the UI, no save-location TCC prompt answered. The two
+conversions that were run (m4a and mp3, characteristics only) went through the
+bundled toolchain directly. ALAC has not been produced at all. Nothing has been
+checked on a clean Mac or with networking off, so `spctl` and `stapler validate`
+prove **notarized** rather than conclusively **stapled**. The human GUI gate is
+with Vijay. Until it clears, the pipeline is proven and the product is not.
+
+One gotcha worth knowing before debugging anything about the installed app: while
+the quarantine attribute is present, macOS runs it under **App Translocation**,
+from a randomized read-only `/private/var/folders/.../AppTranslocation/<uuid>/d/`
+path rather than from `/Applications`. It ran fine there.
+`[verified: launching 2026-08-23]` `xattr -cr` clears it, signature intact.
+
 ## Status — 2026-08-22
+
+**Kept as history. Superseded by the entry above.**
 
 **Scrubbed for public release. Nothing packaged.** The repo has been prepared for
 a public MIT source drop with a Gumroad-only paid DMG, matching the sibling

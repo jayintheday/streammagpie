@@ -45,10 +45,22 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  # An explicit LIST, not a directory walk: only these four get signed with the
-  # entitlements above. Nothing under python/lib (libpython, the lib-dynload
-  # .so modules) is signed here. See the notes below `</plist>` in
-  # build/entitlements.mac.plist for what that may cost at notarize time.
+  # An explicit LIST, not a directory walk. What it guarantees is that these four
+  # are signed WITH THE ENTITLEMENTS ABOVE, by name.
+  #
+  # It is NOT the only thing that signs, and this comment used to say it was.
+  # electron-builder 26.15.3 handles this list first (`signing additional
+  # user-defined binaries`) and then makes a SEPARATE recursive pass over the
+  # finished .app. All 14 Mach-Os in the shipped bundle came out on team
+  # 29UYFH4USR with flags=0x10000(runtime), the ten under python/lib included
+  # (libpython3.12, six Tcl/Tk dylibs, three lib-dynload .so modules).
+  # [verified: run 2026-08-23]
+  #
+  # Do not delete this key on the strength of that: it is what pins the
+  # entitlements onto these four by name, and whether removing it would change
+  # any of the 14 signatures is untested. [inferred] Background and the two
+  # risk hypotheses it disproved: the notes below `</plist>` in
+  # build/entitlements.mac.plist.
   binaries:
     - Contents/Resources/ffmpeg/ffmpeg
     - Contents/Resources/ffmpeg/ffprobe

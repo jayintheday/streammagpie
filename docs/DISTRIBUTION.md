@@ -125,16 +125,28 @@ obvious guess and it returns `401 Invalid credentials`, because an app-specific
 password only ever authenticates against the account that generated it. A
 sibling project lost time to this exact wrong guess.
 
+**The profile now exists and resolves.** It was created on 2026-08-23 and then
+used unattended, twice in the same run: once by electron-builder's inline app
+notarization and once by `scripts/sign-dmg.sh` for the DMG.
+`[verified: run 2026-08-23]` Which Apple ID it was created with is deliberately
+recorded nowhere in this repo — that is hard rule 5, and it applies to this
+paragraph too.
+
 ## Ship checklist (maintainer)
 
-⚠ **None of this has been run.** Nothing below is observed; every step is
-inherited from a sibling that got it working, and the first StreamMagpie build
-will discover which parts of the inheritance do not transfer. See
-[What has not been proven](#what-has-not-been-proven) before believing any step
-is a formality. **Every rebuild re-earns its gates** — nothing signs, notarizes
-or staples by inheritance, two of the build's stages fail open, and the greps in
-step 4 and the verification set in the build skill are run again in full for
-every artefact that goes to a customer.
+**This ran end to end for the first time on 2026-08-23** and produced a signed,
+notarized, stapled `StreamMagpie-0.1.0-arm64.dmg`. `[verified: run 2026-08-23]`
+The steps below are a record rather than an inheritance, and the two corrections
+that run forced are folded in — see
+[The first signed build](#the-first-signed-build--2026-08-23) for what it
+settled and [What has not been proven](#what-has-not-been-proven) for what it
+did not.
+
+⚠ **That does not make any step below a formality. Every rebuild re-earns its
+gates** — nothing signs, notarizes or staples by inheritance, two of the build's
+stages fail open regardless of how the last build went, and the greps in step 4
+and the verification set in the build skill are run again in full for every
+artefact that goes to a customer.
 
 1. **Vendor gates — all four payloads present and verified.** The bundle carries
    four independent payloads and `extraResources` **fails open** on every one of
@@ -171,6 +183,14 @@ every artefact that goes to a customer.
 
    ⚠ **`npm run dist` builds NO DMG** — it is `electron-builder --dir`, the
    unpacked `.app` alone. `dist:dmg` is the one that produces the disk image.
+
+   **Expect roughly nine minutes**, inline app notarization included: on
+   2026-08-23 the app ran 13:47 to 13:56 and the DMG was written at 14:00.
+   `[verified: run 2026-08-23]` Most of that is Apple's notary queue, so it is
+   not a stable number; a run that finishes in two is the shape of one that
+   skipped notarization, which is what step 4's first grep exists to catch. An
+   expectation of twenty minutes carried over from a sibling project belongs to
+   a larger payload, not this one.
 
 3. **Sign the DMG, then notarize it, then staple it. In that order.**
 
@@ -226,7 +246,21 @@ every artefact that goes to a customer.
    it, pastes a URL, and saves **both** an m4a and an MP3 that then play. A log
    cannot answer any of that. The `ship-gumroad` skill blocks on it and asks what
    was on screen; the answer is recorded back into this file as characteristics
-   only, per hard rule 6.
+   only, per hard rule 6. **This gate has not been cleared for 0.1.0.**
+
+   ⚠ **While the quarantine attribute is present, macOS runs the app under App
+   Translocation, and this looks exactly like a path bug.** The app executes from
+   a randomized read-only
+   `/private/var/folders/.../AppTranslocation/<uuid>/d/StreamMagpie.app` — not
+   from `/Applications`, whatever the installer just did. It launched and ran
+   fine from there on 2026-08-23. `[verified: launching 2026-08-23]` The cost is
+   diagnostic: `process.resourcesPath` points inside the translocated copy, so
+   anybody chasing a missing payload sees a path nobody installed to and doubts
+   the install rather than the symptom. `xattr -cr` on the installed bundle
+   clears the attribute and the app then runs from `/Applications` proper, with
+   the signature intact — `codesign --verify --strict` still passes afterwards.
+   `[verified: run 2026-08-23]` Clear it to debug; do not clear it to make a
+   Gatekeeper check pass, because that is the check.
 
 6. **Upload to Gumroad** — [`.claude/skills/ship-gumroad`](../.claude/skills/ship-gumroad/SKILL.md)
    owns this leg. It refuses to run while `YOUR_GUMROAD_PRODUCT_ID` and
@@ -252,7 +286,7 @@ release/mac-arm64/StreamMagpie.app/Contents/
     ├── icon.icns                 the app icon
     ├── ffmpeg/                   ffmpeg, ffprobe (static LGPL, libmp3lame)
     │                             + COPYING.LGPLv2.1, LICENSE.md
-    ├── python/                   CPython 3 (bin/python3, lib/, lib-dynload/)
+    ├── python/                   CPython 3.12.14 (bin/python3, lib/, lib-dynload/)
     │                             + its own LICENSE
     ├── js/                       qjs — the JS runtime yt-dlp uses for n-sig
     └── ytdlp/                    yt_dlp-*.whl (+ yt_dlp.whl floor copy)
@@ -266,73 +300,168 @@ corresponding-source tarball URL in that folder's README. A build that drops
 them is a licence violation, not a cosmetic miss.
 
 `electron-builder.yml`'s `mac.binaries` names four loose Mach-Os —
-`ffmpeg/ffmpeg`, `ffmpeg/ffprobe`, `js/qjs`, `python/bin/python3` — and those are
-the four that get signed. **That list is exactly as long as it looks.**
+`ffmpeg/ffmpeg`, `ffmpeg/ffprobe`, `js/qjs`, `python/bin/python3` — and what it
+guarantees is that those four are signed **with the entitlements**, by name.
+
+⚠ **It is not the only thing that signs, and this document used to say it was.**
+electron-builder 26.15.3 handles the list first — `signing additional
+user-defined binaries` in the log — and then makes a **separate recursive pass**
+over the finished bundle, `signing file=release/mac-arm64/StreamMagpie.app`. All
+**14** Mach-O images in the shipped app carry `Authority=Developer ID
+Application: Intheday Ltd (29UYFH4USR)`, `TeamIdentifier=29UYFH4USR` and
+`flags=0x10000(runtime)`: the four on the list, and the ten under
+`Contents/Resources/python/lib/` the list never names.
+`[verified: run 2026-08-23]`
+
+Do **not** delete `mac.binaries` on the strength of that. It is what pins the
+entitlements onto those four by name, and whether removing it would change any
+of the 14 signatures has not been tested. `[inferred]`
+
+## The first signed build — 2026-08-23
+
+The first ever signed, notarized and stapled StreamMagpie artefact. Everything in
+this section is `[verified: run 2026-08-23]` unless it says otherwise, and it is
+one artefact on one machine on one day — not a proven pipeline.
+
+Environment: electron-builder 26.15.3, Electron 43.4.0, macOS 26.5 (25F71),
+Xcode 26.3, notarytool 1.1.0, Node v24.15.0. The gate was green first
+(`npx tsc -b`, `npm run typecheck -w packages/app`, 19/19 vitest) and
+`npm run vendor:verify` passed all four payload gates.
+
+| | |
+|---|---|
+| Artifact | `packages/app/release/StreamMagpie-0.1.0-arm64.dmg`, **173,500,067 bytes** (165 MB) |
+| Build | `CSC_NAME="Intheday Ltd (29UYFH4USR)" APPLE_KEYCHAIN_PROFILE=streammagpie npm run dist:dmg`, exit 0 |
+| Wall clock | roughly **9 minutes** end to end, inline app notarization included (app 13:47 to 13:56, DMG written 14:00) |
+| The three greps | `skipped macOS notarization` **0**, `file source doesn't exist` **0**, `notarization successful` **1** |
+| The `.app` | `Identifier=co.streammagpie.app`, `flags=0x10000(runtime)`, `Notarization Ticket=stapled`; `codesign --verify --deep --strict` reports "valid on disk" and "satisfies its Designated Requirement" |
+| DMG notary submission | `b3b32e8f-778d-4e50-80b9-1ad3f5f37023`, status **Accepted** |
+| DMG after stapling | `xcrun stapler validate` passes; `spctl -a -t open --context context:primary-signature` returns `accepted / source=Notarized Developer ID` |
+| Icon digest, from the shipped bundle | `4862602c66d1d0eaddd3c55ad4f96de4551e62d6a6c0930aa0e60afa7d2ca553` — matches the constant |
+| Payload, read from the mounted app | ffmpeg 9.0.1, configuration carries `--enable-libmp3lame` and none of `gpl`, `nonfree` or `version3`; `otool -L` returns zero non-system lines for both `ffmpeg` and `ffprobe`; the licence files are present; Python 3.12.14; `qjs` present and executable; both wheels present |
+
+The entitlements plist was handed to a real `codesign` for the first time, on a
+throwaway probe, before any of the above: exit 0 and silent, and
+`codesign -d --entitlements -` then showed exactly the two keys, allow-jit and
+allow-unsigned-executable-memory. **No AMFI double-hyphen fault.** That trap is
+not retired by one pass — it is a property of whatever comment text the file
+carries today, so it is re-earned on every edit.
+
+**Gatekeeper, from a simulated download.** A locally built DMG carries no
+quarantine bit, so one was written by hand:
+`xattr -w com.apple.quarantine "0081;00000000;Safari;"`. Gatekeeper still
+returned `accepted / source=Notarized Developer ID`. Installed into
+`/Applications` the attribute propagated as `0281;00000000;;`, and
+`spctl -a -vvv -t exec` returned `accepted / source=Notarized Developer ID /
+origin=Developer ID Application: Intheday Ltd (29UYFH4USR)`. The app launched
+and stayed alive — gpu-process, network service and renderer helpers all spawned,
+no instant SIGKILL. `[verified: launching 2026-08-23]` It ran under App
+Translocation while quarantined; see step 5 of the ship checklist, which is where
+that will cost somebody an afternoon.
+
+**Two conversions, characteristics only** (hard rule 6), both produced through
+the signed bundle's own python, yt-dlp and ffmpeg, on the canonical public test
+id `jNQXAC9IVRw`:
+
+| Format | Codec | Rate | Channels | Duration | Size | Wall clock |
+|---|---|---|---|---|---|---|
+| m4a | aac | 48000 Hz | 2 | 19.005542 s | 410,228 bytes | ~3 s |
+| mp3 | mp3 | 48000 Hz | 2 | 19.005542 s | 120,620 bytes | ~3 s |
+
+⚠ **Both ran through the bundled toolchain directly, not through the app's UI.**
+They prove the payload converts. They do not prove the product does.
 
 ## What has not been proven
 
-Kept honest and deliberately short. **Nothing here is proven. Not one item.**
+Kept honest and deliberately short. The packaging chain is now proven once; what
+follows is what a green build did not touch, and it is the half that matters to a
+buyer.
 
-- **The app has never been built for release.** `npm run dist:dmg` has not been
-  run. No DMG exists.
-- **Nothing has ever been signed.** The `streammagpie` keychain profile may not
-  exist yet on this machine, and `packages/app/build/entitlements.mac.plist` has
-  never been handed to a real `codesign`.
-- **Nothing has ever been notarized or stapled.** No submission has been made.
-- **The packaged app has never been launched.** No conversion has run through the
-  bundled ffmpeg, the bundled CPython, the bundled qjs or the bundled wheel via
-  `process.resourcesPath`. Paths are asserted by test; a test is not a launch.
+- **The app's own GUI flow has never been exercised.** No URL has been pasted
+  into the running app, no sleeve preview has been seen, nothing has been saved
+  through the UI, and no save-location TCC prompt has been answered. The two
+  conversions above went through python3, yt-dlp and ffmpeg invoked from the
+  signed bundle — **not** through the renderer and IPC that a customer uses. The
+  human gate at step 5 is outstanding, and it is with the maintainer.
+- **Nothing has been checked on a clean Mac, or with networking off.** Both
+  `spctl` and `stapler validate` fall back to an **online** ticket lookup, so
+  every pass recorded above proves **notarized**; none of them conclusively
+  proves **stapled**. A Mac that has never seen this developer, offline, is the
+  only thing that settles that.
+- ⚠ **ALAC is BROKEN, and it fails silently.** Selecting it produces an
+  **AAC** file with an `.m4a` extension — lossy, and byte-for-byte the kind of
+  file the m4a option already gives you. `[verified: run 2026-08-23]` The cause
+  is upstream, not ours: `packages/engine/src/argv.ts` builds the correct
+  `-x --audio-format alac`, and yt-dlp's own table has
+  `'alac': ('m4a', None, ('-acodec', 'alac'))` — but in
+  `yt_dlp/postprocessor/ffmpeg.py`, `FFmpegExtractAudioPP.run()` then does
+  `more_opts = self._quality_args(acodec)`, which **replaces** rather than
+  extends. Because alac's encoder entry is `None` (not `'copy'`), that branch is
+  taken and the `-acodec alac` pair is discarded. The command that finally runs
+  is `ffmpeg -vn -movflags +faststart out.m4a`, and ffmpeg defaults the m4a
+  container to AAC. The bundled ffmpeg is **not** at fault: it carries both
+  `alac` and `alac_at` encoders and produces real ALAC when asked directly.
+  A working invocation adds `--postprocessor-args "ExtractAudio:-acodec alac"`,
+  which yields `codec_name=alac`, `bits_per_raw_sample=24`, 2,441,748 bytes for
+  the same 19.006 s source that the broken path renders in 310,517 bytes — the
+  size gap is the tell. **This must be fixed before ALAC is sold as lossless.**
+- **Nothing has been rebuilt.** One green build is not a reproducible one, and
+  the vendor payloads it consumed are gitignored downloads rather than tracked
+  inputs.
 - **No customer has ever received anything**, because the Gumroad product does
   not exist.
 
-### Two risk hypotheses for the first signed build `[inferred]`
+### The two risk hypotheses — both disproven `[verified: run 2026-08-23]`
 
-Both are reasoned from the payload layout, not observed. They are recorded here
-so the first build's failure is diagnosed rather than guessed at, and so nobody
-widens the entitlements pre-emptively to make a symptom go away.
-
-**(a) The CPython payload's nested Mach-Os are not walked.**
-`mac.binaries` lists `Contents/Resources/python/bin/python3` and nothing else
-under `python/`. A python-build-standalone tree also carries **many** Mach-O
-files that are not that binary: every C extension under `lib/python3.12/
-lib-dynload/*.so`, plus `lib/libpython3.12.dylib`. electron-builder signs the
-loose files `mac.binaries` names; it does **not** walk a directory of extra
-resources hunting for Mach-Os the way it walks a nested `.app` bundle. An
-unsigned nested Mach-O is a documented notarization rejection.
-
-*Likely fix:* a **deep-sign pass over the whole `python` tree** before the DMG is
-built — find every Mach-O under `Contents/Resources/python`, sign each with the
-Developer ID, hardened runtime and the same entitlements, innermost first. That
-is also the fix that makes hypothesis (b) moot, because it puts the entire tree
-on our own Team ID.
-
-*Symptom if unaddressed:* `notarytool` returns Invalid, and the submission log
-names specific `.so` paths as "not signed with a valid Developer ID
-certificate".
-
-**(b) Hardened-runtime library validation versus CPython's `dlopen`.**
-Library validation requires that code loaded into a process be signed by the same
-Team ID as the process, or by Apple. CPython's whole extension mechanism is
-`dlopen` on the `lib-dynload/*.so` files at import time. **If the deep-sign pass
-in (a) happens, this resolves itself** — same team, so both branches of the rule
-are satisfied and no exception is needed. If it does not, or if a payload arrives
-pre-signed by somebody else's team, the build may need
-`com.apple.security.cs.disable-library-validation` in
+This section used to carry two `[inferred]` hypotheses about what the first
+signed build would hit. Both were wrong, and both were wrong for the same
+underlying reason: **this repo asserted in three places that electron-builder
+signs only the loose files `mac.binaries` names and does not walk a directory of
+extra resources.** For electron-builder 26.15.3 that is false. It signs the named
+list first, then makes a separate recursive pass over the finished `.app`, and
+all 14 Mach-Os in the bundle came out on our Team ID with the hardened runtime
+set. The corrected statement now lives in
+[What ships inside the DMG](#what-ships-inside-the-dmg),
+`packages/app/electron-builder.yml` and
 `packages/app/build/entitlements.mac.plist`.
 
-⚠ **That key is a real widening and it is not the first thing to try.** Establish
-*what* got rejected first. The deep-sign pass is the narrower fix and should be
-exhausted before the entitlement is considered.
+**(a) The CPython payload's nested Mach-Os are not walked — no.** The notary
+service never got the chance to be lenient, and that mechanism is the finding
+rather than the pass itself: there were no unsigned nested Mach-Os in the
+submission, because electron-builder's recursive pass had already signed every
+one of them with our Developer ID under the hardened runtime. The proposed
+deep-sign pass over `Contents/Resources/python` is work electron-builder already
+does.
 
-*Symptom if this is the cause:* the packaged app dies by **instant SIGKILL** the
-moment Python starts — no dialog, no error, nothing in any log. **An empty log is
-the signature of this failure**, which is exactly what makes it get misdiagnosed
-as a path bug.
+The payload description that hypothesis rested on was also wrong in scale. It
+said "every C extension under `lib/python3.12/lib-dynload/*.so`", implying many.
+This python-build-standalone tree carries **three** `.so` files — `_crypt`,
+`_dbm`, `_tkinter` — plus **seven** dylibs (`libpython3.12`, `libtcl9.0`,
+`libtcl9tk9.0`, `libitcl4.3.8`, `libtcl9itcl4.3.8`, `libthread3.0.6`,
+`libtcl9thread3.0.6`): **ten** nested Mach-Os in total. Most extensions,
+`_ssl`, `_socket`, `_hashlib` and `binascii` among them, are statically linked
+into `libpython3.12.dylib` and are not separate files at all.
 
-Both hypotheses are cross-referenced from
-`packages/app/build/entitlements.mac.plist`, which is the file that would carry
-the fix for (b) and which records why each absent entitlement is absent. Read it
-before adding a key.
+**(b) Hardened-runtime library validation versus CPython's `dlopen` — no**, and
+this was tested directly rather than inferred from (a). From the app installed in
+`/Applications`, under the hardened runtime it shipped with:
+`python3 --version` gives Python 3.12.14, exit 0;
+`python3 -c 'import ssl, zlib, ctypes, sqlite3, hashlib, bz2, lzma, socket,
+binascii'` reports all C extensions imported OK, exit 0; and `import yt_dlp` off
+the floor wheel loads yt-dlp 2026.08.19, exit 0. That import **is** the `dlopen`
+operation library validation governs. No SIGKILL, and no empty log.
+
+So `com.apple.security.cs.disable-library-validation` is **not needed and stays
+absent**. `packages/app/build/entitlements.mac.plist` records it as a settled
+absence with this evidence, and still argues against adding it speculatively:
+with it set, any dylib can be loaded into the process. Read that file before
+adding any key.
+
+⚠ **Keep the symptom on record even though it did not happen.** If library
+validation ever does reject an extension module, the extractor dies by **instant
+SIGKILL** the moment a conversion starts — no dialog, no error, nothing in any
+log. **An empty log is the signature of that failure**, which is exactly what
+gets it misdiagnosed as a path bug. A payload change can reintroduce it.
 
 ## Customer updates
 
