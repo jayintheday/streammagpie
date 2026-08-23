@@ -54,6 +54,26 @@ export function buildYtDlpArgs(job: YtDlpJob): BuiltArgs {
     args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
   } else {
     args.push('-f', 'bestaudio', '-x', '--audio-format', 'alac');
+    // ⚠ ALAC NEEDS THE CODEC FORCED, BECAUSE yt-dlp DROPS ITS OWN. The
+    // ACODECS table carries the right pair — `'alac': ('m4a', None,
+    // ('-acodec', 'alac'))` — but `FFmpegExtractAudioPP.run()` then does
+    // `more_opts = self._quality_args(acodec)`, which REPLACES `more_opts`
+    // rather than extending it. alac's encoder entry is `None` and not
+    // `'copy'`, so that branch is taken, the `-acodec alac` pair is discarded,
+    // and ffmpeg gets a bare `.m4a` output — which it defaults to AAC. The
+    // lossless option silently returned a lossy file indistinguishable from
+    // the m4a one. `[verified: source — yt-dlp 2026.8.19,
+    // yt_dlp/postprocessor/ffmpeg.py]`
+    //
+    // `--postprocessor-args` survives the overwrite: it reaches the ffmpeg
+    // command through `_configuration_args()` on the output file, which
+    // `_quality_args()` never touches. Exactly two argv elements — yt-dlp
+    // splits the value itself. Forward-safe: if a later wheel fixes this
+    // upstream, `-acodec alac` simply appears twice and ffmpeg honours the
+    // last one. `[verified: run 2026-08-23 — codec_name=alac,
+    // bits_per_raw_sample=24, 2,441,748 bytes, against 310,517 bytes for the
+    // dropped-flag path on the same 19.006 s source]`
+    args.push('--postprocessor-args', 'ExtractAudio:-acodec alac');
   }
 
   args.push('--', job.url);

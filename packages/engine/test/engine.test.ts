@@ -51,6 +51,21 @@ describe('buildYtDlpArgs', () => {
     expect(args).toContain('--no-update');
     expect(args.join(' ')).toContain('player_client=visionos');
   });
+  it('alac forces the codec yt-dlp drops', () => {
+    const { args } = buildYtDlpArgs({
+      url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw',
+      outputDir: '/tmp/out',
+      format: 'alac',
+    });
+    expect(args).toContain('-x');
+    expect(args[args.indexOf('--audio-format') + 1]).toBe('alac');
+    // Without this pair yt-dlp discards its own `-acodec alac` and ffmpeg
+    // writes AAC into the .m4a container — silently lossy. The two elements
+    // must stay adjacent: the value is one argv element, split by yt-dlp.
+    const i = args.indexOf('--postprocessor-args');
+    expect(i).toBeGreaterThan(-1);
+    expect(args[i + 1]).toBe('ExtractAudio:-acodec alac');
+  });
   it('flags a web-only chain', () => {
     const { usesDeadWebClient } = buildYtDlpArgs({
       url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw',

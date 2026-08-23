@@ -371,6 +371,48 @@ id `jNQXAC9IVRw`:
 ⚠ **Both ran through the bundled toolchain directly, not through the app's UI.**
 They prove the payload converts. They do not prove the product does.
 
+## The ALAC defect — found on 0.1.0, fixed in 0.1.1
+
+⚠ **On 0.1.0, choosing ALAC produced an AAC file with an `.m4a` extension** —
+lossy, and indistinguishable from what the m4a option already gives you. It
+failed silently: no warning, no error, a plausible file of a plausible size.
+`[verified: run 2026-08-23, against the shipped 0.1.0 bundle]`
+
+**The cause was upstream, not ours.** `packages/engine/src/argv.ts` built the
+correct `-x --audio-format alac`, and yt-dlp's own table has
+`'alac': ('m4a', None, ('-acodec', 'alac'))` — but in
+`yt_dlp/postprocessor/ffmpeg.py`, `FFmpegExtractAudioPP.run()` then does
+`more_opts = self._quality_args(acodec)`, which **replaces** rather than
+extends. Because alac's encoder entry is `None` (not `'copy'`), that branch is
+taken and the `-acodec alac` pair is discarded. What actually ran was
+`ffmpeg -y -loglevel repeat+info -i in.webm -vn -movflags +faststart out.m4a`,
+and ffmpeg defaults the m4a container to AAC.
+`[verified: source — yt-dlp 2026.8.19, yt_dlp/postprocessor/ffmpeg.py]` The
+bundled ffmpeg is **not** at fault: it carries both `alac` and `alac_at`
+encoders and produces real ALAC when asked directly. `[verified: run 2026-08-23]`
+
+**The fix now in `argv.ts`:** the alac branch also passes `--postprocessor-args`
+with `ExtractAudio:-acodec alac` — two argv elements, since yt-dlp splits the
+value itself. That flag reaches the ffmpeg command line through
+`_configuration_args()` on the output file, which `_quality_args()` never
+touches, so the overwrite above cannot reach it.
+`[verified: source — same file]` Measured against the shipped 0.1.0 bundle, the
+same 19.006 s source yields `codec_name=alac`, `bits_per_raw_sample=24` and
+**2,441,748 bytes** with the flag, against **310,517 bytes** without it — the
+size gap is the tell. `[verified: run 2026-08-23]` It is forward-safe: if a
+later wheel fixes this upstream, `-acodec alac` appears twice on the command
+line and ffmpeg honours the last one. `[inferred]`
+`packages/engine/test/engine.test.ts` carries the regression test that was
+missing — `alac forces the codec yt-dlp drops` — and it asserts the flag and its
+value stay **adjacent** in the built argv, which is the shape a well-meaning
+tidy-up would break.
+
+⚠ **0.1.1 has not been built, and no ALAC file has come out of it.** What is
+proven is the invocation and the argv that now produces it; the artefact is
+pending. Until a 0.1.1 build converts and `ffprobe` reports `codec_name=alac`
+on its output, this is a fixed defect **on paper**, and ALAC is not to be sold
+as lossless on the strength of it. `[inferred]`
+
 ## What has not been proven
 
 Kept honest and deliberately short. The packaging chain is now proven once; what
@@ -388,23 +430,12 @@ buyer.
   every pass recorded above proves **notarized**; none of them conclusively
   proves **stapled**. A Mac that has never seen this developer, offline, is the
   only thing that settles that.
-- ⚠ **ALAC is BROKEN, and it fails silently.** Selecting it produces an
-  **AAC** file with an `.m4a` extension — lossy, and byte-for-byte the kind of
-  file the m4a option already gives you. `[verified: run 2026-08-23]` The cause
-  is upstream, not ours: `packages/engine/src/argv.ts` builds the correct
-  `-x --audio-format alac`, and yt-dlp's own table has
-  `'alac': ('m4a', None, ('-acodec', 'alac'))` — but in
-  `yt_dlp/postprocessor/ffmpeg.py`, `FFmpegExtractAudioPP.run()` then does
-  `more_opts = self._quality_args(acodec)`, which **replaces** rather than
-  extends. Because alac's encoder entry is `None` (not `'copy'`), that branch is
-  taken and the `-acodec alac` pair is discarded. The command that finally runs
-  is `ffmpeg -vn -movflags +faststart out.m4a`, and ffmpeg defaults the m4a
-  container to AAC. The bundled ffmpeg is **not** at fault: it carries both
-  `alac` and `alac_at` encoders and produces real ALAC when asked directly.
-  A working invocation adds `--postprocessor-args "ExtractAudio:-acodec alac"`,
-  which yields `codec_name=alac`, `bits_per_raw_sample=24`, 2,441,748 bytes for
-  the same 19.006 s source that the broken path renders in 310,517 bytes — the
-  size gap is the tell. **This must be fixed before ALAC is sold as lossless.**
+- **No ALAC file has been produced by 0.1.1.** The defect that made ALAC return
+  AAC on 0.1.0 is fixed in `packages/engine/src/argv.ts` and held by a
+  regression test — the diagnosis, the measurements and what is still owed are
+  in **The ALAC defect** above. Nothing has been rebuilt since the fix was
+  written, so the claim that a 0.1.1 app converts to real ALAC is `[inferred]`
+  until a build does it and `ffprobe` says `codec_name=alac`.
 - **Nothing has been rebuilt.** One green build is not a reproducible one, and
   the vendor payloads it consumed are gitignored downloads rather than tracked
   inputs.

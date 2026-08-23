@@ -379,12 +379,32 @@ imports its C extensions under the hardened runtime without
 [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) and
 `packages/app/build/entitlements.mac.plist` carry the evidence.
 
+**ALAC was broken on 0.1.0. The fix is written; nothing has been built with it.**
+Choosing ALAC produced an **AAC** file with an `.m4a` extension — lossy, silent,
+and indistinguishable from what the m4a option already gives.
+`[verified: run 2026-08-23]` The fault is upstream: yt-dlp's own ACODECS table
+carries `-acodec alac`, but `FFmpegExtractAudioPP.run()` overwrites `more_opts`
+with `_quality_args()` because alac's encoder entry is `None` rather than
+`'copy'`, so the pair is discarded and ffmpeg defaults the m4a container to AAC.
+`[verified: source — yt-dlp 2026.8.19]` `packages/engine/src/argv.ts` now forces
+the codec back on with `--postprocessor-args ExtractAudio:-acodec alac`, which
+on the same 19.006 s source gives `codec_name=alac`, `bits_per_raw_sample=24`
+and 2,441,748 bytes against 310,517 bytes for the dropped-flag path.
+`[verified: run 2026-08-23]` The alac branch had **no test at all**, which is
+why this shipped; `packages/engine/test/engine.test.ts` now has one that pins
+the flag and its value together. `packages/app/package.json` is **0.1.1** and
+no artefact carries that number — the gate is green, the DMG does not exist, and
+a 0.1.1 app producing real ALAC stays `[inferred]` until a build does it and
+`ffprobe` is asked. The record is in
+[`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
+
 **Still not done, and it is the interesting half.** The app's own GUI flow has
 never been exercised — no URL pasted into the running app, no sleeve preview
 seen, nothing saved through the UI, no save-location TCC prompt answered. The two
 conversions that were run (m4a and mp3, characteristics only) went through the
-bundled toolchain directly. ALAC has not been produced at all. Nothing has been
-checked on a clean Mac or with networking off, so `spctl` and `stapler validate`
+bundled toolchain directly. ALAC has never been produced through the app, and no
+packaged build carries the argv fix above. Nothing has been checked on a clean
+Mac or with networking off, so `spctl` and `stapler validate`
 prove **notarized** rather than conclusively **stapled**. The human GUI gate is
 with Vijay. Until it clears, the pipeline is proven and the product is not.
 
