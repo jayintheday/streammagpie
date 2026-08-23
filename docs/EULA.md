@@ -1,8 +1,9 @@
 # StreamMagpie — terms of sale
 
 Plain language, and short on purpose. These terms cover the **official
-StreamMagpie build** sold on Gumroad. They do not cover the MIT source. Paste
-this text into the Gumroad listing; this file is the copy of record.
+StreamMagpie build** sold on Gumroad. They do not cover the MIT source. The
+Gumroad listing links to this file rather than reproducing it; this file is
+the copy of record.
 
 ## What you are buying
 

@@ -14,8 +14,8 @@ The official macOS app — **StreamMagpie**, Developer ID signed, notarized, wit
 bundled LGPL ffmpeg — is sold on **Gumroad only**. We do **not** publish DMGs or
 other binaries on GitHub Releases.
 
-- Buy / download: the Gumroad product is **not created yet**; the link lands here
-  when it exists.
+- Buy / download: <https://6185821221924.gumroad.com/l/streammagpie> — listing
+  is set up but not yet published; nothing is for sale there yet.
 - Distribution rules: [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)
 
 Updates for customers are new Gumroad file versions (re-download from your

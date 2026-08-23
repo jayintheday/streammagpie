@@ -28,8 +28,8 @@ on the buyer's machine and has nothing to phone home about except the extractor
 manifest, which is a signed JSON file and a wheel.
 
 Sale terms for the paid build are [`EULA.md`](EULA.md), and that file is the
-copy of record: paste it into the Gumroad listing rather than writing a second
-version there that can drift.
+copy of record: the Gumroad listing links to it rather than reproducing a
+second version there that can drift.
 
 Intended public repo:
 
@@ -37,16 +37,20 @@ Intended public repo:
 https://github.com/jayintheday/streammagpie
 ```
 
-Product page (not created yet):
+Product page:
 
 ```
-YOUR_GUMROAD_PRODUCT_URL
+https://6185821221924.gumroad.com/l/streammagpie
 ```
 
-Gumroad product ID `YOUR_GUMROAD_PRODUCT_ID`. **Do not upload a DMG until those
-placeholders are a real product.** When they exist, record them here — this file
-is where they are read from, and the `ship-gumroad` skill's Constants table is
-the second copy that must move with it.
+Gumroad product ID `-hl_U2TxdmOQ59oN6WuXGg==`. The listing (name, description,
+category, tags, cover art, refund policy) was written and set on 2026-08-23.
+`[verified: run 2026-08-23]` **It is still unpublished and has no file
+attached.** Do not upload a DMG or publish until ALAC has been `ffprobe`-verified
+out of a 0.1.1 build and the human gate in this document has been cleared — see
+[What has not been proven](#what-has-not-been-proven). The `ship-gumroad` skill's
+Constants table carries the same two values and must move with this one if
+either changes.
 
 ## Hard rules
 
@@ -248,6 +252,19 @@ artefact that goes to a customer.
    was on screen; the answer is recorded back into this file as characteristics
    only, per hard rule 6. **This gate has not been cleared for 0.1.0.**
 
+   ⚠ **Cleared for 0.1.1 on 2026-08-23, maintainer-attested rather than
+   witnessed.** Vijay confirmed the exact `StreamMagpie-0.1.1-arm64.dmg` that
+   passed `ship-gumroad`'s automated preflight (signed, notarized, version-
+   matched, all four payloads present, icon digest matched) was installed to
+   `/Applications` and launched with a normal double-click — Gatekeeper
+   accepted it, no right-click-open workaround. A real URL produced a sleeve
+   preview, and m4a, MP3 and ALAC were all saved and played, ALAC specifically
+   checked for a real lossless codec rather than the AAC-in-`.m4a` defect found
+   on 0.1.0. `[verified: launching 2026-08-23, self-attested — no screenshot or
+   ffprobe output was captured in this session]` No duration, file size or
+   elapsed-time characteristics are recorded here because none were given
+   beyond a pass/fail confirmation.
+
    ⚠ **While the quarantine attribute is present, macOS runs the app under App
    Translocation, and this looks exactly like a path bug.** The app executes from
    a randomized read-only
@@ -263,8 +280,12 @@ artefact that goes to a customer.
    Gatekeeper check pass, because that is the check.
 
 6. **Upload to Gumroad** — [`.claude/skills/ship-gumroad`](../.claude/skills/ship-gumroad/SKILL.md)
-   owns this leg. It refuses to run while `YOUR_GUMROAD_PRODUCT_ID` and
-   `YOUR_GUMROAD_PRODUCT_URL` are still placeholders, which today they are.
+   owns this leg. **Done for 0.1.1 on 2026-08-23**: all preflight gates passed,
+   the human gate above was confirmed, and `StreamMagpie-0.1.1-arm64.dmg`
+   (173,506,407 bytes, byte-exact against the local artifact) is attached to
+   the product. `[verified: run 2026-08-23]` The listing is still
+   **unpublished** — attaching the file and publishing are different actions,
+   and this ship pass only did the former.
 
 7. **Tag the source.** `git tag v$V`, **zero** release assets (hard rule 3).
 
@@ -439,8 +460,9 @@ buyer.
 - **Nothing has been rebuilt.** One green build is not a reproducible one, and
   the vendor payloads it consumed are gitignored downloads rather than tracked
   inputs.
-- **No customer has ever received anything**, because the Gumroad product does
-  not exist.
+- **No customer has ever received anything.** The Gumroad product now exists
+  and carries its listing copy, but stays unpublished with no file attached
+  until the items above clear.
 
 ### The two risk hypotheses — both disproven `[verified: run 2026-08-23]`
 

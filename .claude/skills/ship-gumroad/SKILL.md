@@ -19,22 +19,29 @@ the answer is to go back to `build-dmg`, not to fix it from here.
 
 | | |
 |---|---|
-| Gumroad product ID | `YOUR_GUMROAD_PRODUCT_ID` |
-| Product URL | `YOUR_GUMROAD_PRODUCT_URL` |
+| Gumroad product ID | `-hl_U2TxdmOQ59oN6WuXGg==` |
+| Product URL | `https://6185821221924.gumroad.com/l/streammagpie` |
 | Artifact | `packages/app/release/StreamMagpie-$V-arm64.dmg` |
 | Version source | `packages/app/package.json` (single source of truth) |
 | Retired placeholder icon digest | `6ee152c8a54a0859e6d84d3ecd20d0a71564272b59c0656ccc9607550686b7b0` |
 | Current icon digest (build/icon.icns) | `4862602c66d1d0eaddd3c55ad4f96de4551e62d6a6c0930aa0e60afa7d2ca553` |
 
 ⚠ **HARD RULE — REFUSE TO UPLOAD WHILE THE PLACEHOLDERS ARE PLACEHOLDERS.** The
-product does not exist on Gumroad yet. If `YOUR_GUMROAD_PRODUCT_ID` or
-`YOUR_GUMROAD_PRODUCT_URL` still reads literally as written above, **stop
-immediately**: do not call `gumroad products update`, do not guess a product ID
-from `gumroad products list`, do not create the product. Report that the product
-has to be created first and these two constants filled in by a human (and the
-same pair recorded in `docs/DISTRIBUTION.md`). **An upload to the wrong product
-ID replaces some other product's download** — it is not a failed command, it is a
+product now exists on Gumroad (constants above), but if `YOUR_GUMROAD_PRODUCT_ID`
+or `YOUR_GUMROAD_PRODUCT_URL` is ever read as literal placeholder text again —
+this table reverted, a different repo state, a stale copy — **stop immediately**:
+do not call `gumroad products update`, do not guess a product ID from
+`gumroad products list`, do not create the product. Report that the product has
+to be created first and these two constants filled in by a human (and the same
+pair recorded in `docs/DISTRIBUTION.md`). **An upload to the wrong product ID
+replaces some other product's download** — it is not a failed command, it is a
 different product's customers getting this DMG.
+
+The listing itself (name, description, category, tags, cover art, refund
+policy) was written and set on 2026-08-23. `[verified: run 2026-08-23]` It is
+still unpublished and carries no file — this skill's own job (steps below) is
+what fills that in, once the human gate and the ALAC verification it depends on
+have cleared.
 
 Two quoting traps, both of which fail in confusing ways:
 
