@@ -108,16 +108,21 @@ describe('probe helpers', () => {
     expect(formatDuration(null)).toBe('');
   });
   it('parses -J title and thumbnail', () => {
+    // Synthetic title, deliberately. Hard rule 6 in docs/DISTRIBUTION.md: no
+    // real video or track names in this repo, tests included. The em dash is
+    // the part that matters here — it is the character a title is most likely
+    // to carry and most likely to be mangled by. Keep it; do not "improve"
+    // this into something real.
     const m = parseProbeJson(
       JSON.stringify({
-        title: 'Sam Paganini — Rave',
+        title: 'Example Artist — Example Track',
         duration: 424,
         id: 'abc',
         thumbnail: 'https://i.ytimg.com/vi/abc/default.jpg',
         thumbnails: [{ url: 'https://i.ytimg.com/vi/abc/default.jpg' }, { url: 'https://i.ytimg.com/vi/abc/max.jpg' }],
       }),
     );
-    expect(m.title).toContain('Rave');
+    expect(m.title).toBe('Example Artist — Example Track');
     expect(m.durationSec).toBe(424);
     expect(m.thumbnailUrl).toContain('max.jpg');
   });
