@@ -220,9 +220,20 @@ fi
 say "done"
 printf '%s\n' "$DMG"
 echo
-echo "Before uploading, grep the original electron-builder log for:"
+# ⚠ THESE TWO REMINDER LINES CONTAIN THE LITERAL STRINGS THE GATE GREPS FOR.
+# If this script's output is teed into the SAME file as the electron-builder
+# build log, both must-be-0 greps become 1 and the gate reports a failure that
+# is really just this reminder quoting itself. Keep the logs separate:
+#   npm run dist:dmg   2>&1 | tee /tmp/streammagpie-build.log
+#   bash scripts/sign-dmg.sh "$DMG" 2>&1 | tee /tmp/streammagpie-sign.log
+# There is no way to name a pattern without containing it, so separation is the
+# rule rather than some cleverer quoting. Found 2026-08-24 during the 0.1.2 run.
+echo "Before uploading, grep the BUILD log (not this script's output) for:"
 echo "  skipped macOS notarization   (want 0 hits -- the .app inside must be notarized too)"
 echo "  file source doesn't exist    (want 0 hits -- a missing vendor/ helper fails OPEN)"
+echo
+echo "⚠ Do NOT tee this script into that same log: the two lines above would"
+echo "  themselves become hits and flip both gates from 0 to 1."
 echo
 echo "Official builds are distributed through Gumroad only, never as a GitHub"
 echo "Release asset."
