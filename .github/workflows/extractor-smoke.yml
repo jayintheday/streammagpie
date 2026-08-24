@@ -1,11 +1,33 @@
-# Daily extractor gate. Publishes wheels only — never the app DMG.
+# Extractor gate. Publishes nothing — never the app DMG, and (today) not a wheel either.
+#
+# ⚠ THIS JOB IS DELIBERATELY NOT SCHEDULED. It ran daily on a cron until
+# 2026-08-24 and failed both times it ever fired, on 08-23 and 08-24, with
+# `Sign in to confirm you're not a bot`. That is not an extractor regression: it
+# is YouTube refusing a datacenter IP. StreamMagpie ships no cookie import, no
+# sign-in and no PO-token provider by design (AGENTS.md), and refuses proxy
+# rotation outright, so there is nothing this repo is willing to do to make a
+# GitHub-hosted runner look residential. A daily red X that no one can act on
+# trains you to ignore the one that matters. Run it from a real machine instead:
+#
+#     bash scripts/extractor-smoke.sh
+#
+# It is kept here as workflow_dispatch so a wheel candidate can still be checked
+# on a clean macOS box, and because the run distinguishes INCONCLUSIVE (exit 2,
+# a bot wall) from FAIL (exit 1, the formats we ship against are actually gone).
 name: extractor-smoke
 on:
-  schedule:
-    - cron: '0 6 * * *'
   workflow_dispatch:
+    inputs:
+      wheel:
+        description: Which yt-dlp to test
+        type: choice
+        default: pinned
+        options:
+          - pinned        # the wheel the DMG actually ships (scripts/vendor-ytdlp.sh)
+          - pypi-latest   # today's release, to see if a pin bump is safe
+          - pypi-nightly  # today's pre-release
 permissions:
-  contents: write
+  contents: read
 jobs:
   smoke:
     runs-on: macos-14
@@ -14,38 +36,53 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Stable wheel
+
+      # vendor/ is a tracked directory with ignored contents, so a fresh clone has
+      # no wheel at all. `pinned` therefore has to fetch it — vendor-ytdlp.sh pulls
+      # one pinned URL and verifies its sha256, so this tests the exact bytes that
+      # ship rather than whatever PyPI published this morning. That distinction is
+      # why the old job's green runs would have meant nothing.
+      - name: Fetch the wheel under test
+        id: wheel
         run: |
-          python -m pip download yt-dlp -d /tmp/wheels --no-deps
-          WHL=$(ls -t /tmp/wheels/yt_dlp-*.whl | head -1)
-          echo "WHEEL=$WHL" >> "$GITHUB_ENV"
-          echo "STABLE_VER=$(basename "$WHL")" >> "$GITHUB_ENV"
-      - name: Smoke stable
-        id: stable
-        continue-on-error: true
+          case "${{ inputs.wheel }}" in
+            pinned)
+              bash scripts/vendor-ytdlp.sh
+              echo "path=" >> "$GITHUB_OUTPUT"      # empty: the script defaults to the vendored floor
+              ;;
+            pypi-latest)
+              python -m pip download yt-dlp -d /tmp/wheels --no-deps
+              echo "path=$(ls -t /tmp/wheels/yt_dlp-*.whl | head -1)" >> "$GITHUB_OUTPUT"
+              ;;
+            pypi-nightly)
+              python -m pip download yt-dlp -d /tmp/wheels --no-deps --pre
+              echo "path=$(ls -t /tmp/wheels/yt_dlp-*.whl | head -1)" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      # The bundled QuickJS is not vendored here. Its absence is reported by the
+      # script and is not a failure; see the runtime-name note in extractor-smoke.sh.
+      - name: Smoke
         env:
-          WHEEL: ${{ env.WHEEL }}
-          PYTHONPATH: ${{ env.WHEEL }}
-        run: bash scripts/extractor-smoke.sh
-      - name: Nightly fallback
-        if: steps.stable.outcome != 'success'
+          # WHEEL is the script's single knob. The old job set PYTHONPATH inline for
+          # its nightly leg while a stale WHEEL was still in the job env, and WHEEL
+          # won — so the nightly wheel was downloaded and then never actually tested,
+          # which is why both legs failed identically. Set WHEEL, never PYTHONPATH.
+          WHEEL: ${{ steps.wheel.outputs.path }}
         run: |
-          python -m pip index versions yt-dlp || true
-          python -m pip download -i https://pypi.org/simple yt-dlp -d /tmp/nightly --pre --no-deps || \
-            echo "No pre-release; leave stable failed"
-          WHL=$(ls -t /tmp/nightly/yt_dlp-*.whl 2>/dev/null | head -1 || true)
-          if [[ -z "$WHL" ]]; then exit 1; fi
-          PYTHONPATH="$WHL" bash scripts/extractor-smoke.sh
-          echo "WHEEL=$WHL" >> "$GITHUB_ENV"
-      - name: Publish wheel only
-        if: github.repository == 'jayintheday/streammagpie'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Requires EXTRACTOR_SIGNING_KEY secret for a real signature. Without it, skip upload.
-          if [[ -z "${EXTRACTOR_SIGNING_KEY:-}" ]]; then
-            echo "No EXTRACTOR_SIGNING_KEY; smoke passed locally to logs only."
-            exit 0
-          fi
-          SHA=$(shasum -a 256 "$WHEEL" | awk '{print $1}')
-          echo "Would upload $(basename "$WHEEL") sha256=$SHA — wire minisign/ed25519 here."
+          set +e
+          bash scripts/extractor-smoke.sh
+          rc=$?
+          set -e
+          case $rc in
+            0)
+              echo "::notice title=Extractor smoke::PASS - audio-only formats present, itag 140 or 251 among them."
+              ;;
+            2)
+              echo "::warning title=Extractor smoke inconclusive::YouTube did not let this runner extract, so the extractor was never exercised. Expected on a datacenter IP. Re-run 'bash scripts/extractor-smoke.sh' on a residential connection before concluding anything."
+              ;;
+            *)
+              echo "::error title=Extractor smoke FAILED::yt-dlp extracted the video but the audio formats StreamMagpie ships against are gone. This is a real regression."
+              exit 1
+              ;;
+          esac

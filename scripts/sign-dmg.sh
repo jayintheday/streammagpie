@@ -116,7 +116,11 @@ ok "signing identity: $ID"
 
 ok "notarytool keychain profile: $PROFILE"
 step "if notarization fails on credentials, recreate the profile with:"
-step "  xcrun notarytool store-credentials $PROFILE --apple-id <id> --team-id 29UYFH4USR --password <app-specific-password>"
+step "  xcrun notarytool store-credentials $PROFILE \\"
+step "    --key ~/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8 \\"
+step "    --key-id XXXXXXXXXX --issuer <issuer-uuid>"
+step "⚠ an App Store Connect API key, NOT an app-specific password: every"
+step "  app-specific password on this account was revoked on 2026-08-23."
 
 # ---------------------------------------------------------------------------
 # 2. Sign
