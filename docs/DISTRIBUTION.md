@@ -114,22 +114,32 @@ file that gets committed:
 
 ```bash
 xcrun notarytool store-credentials streammagpie \
-  --apple-id <apple-id> --team-id 29UYFH4USR
+  --key ~/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8 \
+  --key-id XXXXXXXXXX --issuer <issuer-uuid>
 ```
 
-It prompts for an **app-specific password** (generated at appleid.apple.com),
-not the account password. Check it later without submitting anything:
+That is an **App Store Connect API key**, not an app-specific password. All three
+values come from App Store Connect → Users and Access → Integrations → App Store
+Connect API → **Team Keys** (Access: Developer or higher). The `.p8` downloads
+exactly once, at creation; the Issuer ID is the UUID at the top of that page.
 
-```bash
-xcrun notarytool history --keychain-profile streammagpie
-```
+⚠ **App-specific passwords are no longer used, and the switch was not optional.**
+Every one on this account was revoked on 2026-08-23, which broke notarization in
+six apps at once — silently in this one, because electron-builder logs
+`skipped macOS notarization` and still exits 0. An API key is a separate credential
+class that a password revocation does not touch, and it does not expire.
 
-⚠ **The Apple ID that works is not the git-committer address.** That is the
-obvious guess and it returns `401 Invalid credentials`, because an app-specific
-password only ever authenticates against the account that generated it. A
-sibling project lost time to this exact wrong guess.
+⚠ **Do not use `xcrun notarytool history` as a health check.** It has returned
+`No Keychain password item found` for profiles that demonstrably work, on this
+machine, minutes after a successful notarization. A real submit is the only proof.
 
-**The profile now exists and resolves.** It was created on 2026-08-23 and then
+The old warning that "the Apple ID that works is not the git-committer address" is
+now moot: an API key authenticates a team, not a person, so no Apple ID is involved.
+
+**The profile now exists and resolves.** It was **re-created on 2026-08-24**
+against the App Store Connect API key, and `store-credentials` validated it with
+Apple at creation. `[verified: run 2026-08-24]` It was originally created on
+2026-08-23 against an app-specific password, and then
 used unattended, twice in the same run: once by electron-builder's inline app
 notarization and once by `scripts/sign-dmg.sh` for the DMG.
 `[verified: run 2026-08-23]` Which Apple ID it was created with is deliberately
