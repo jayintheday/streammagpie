@@ -136,7 +136,14 @@ run_gate() {
   else
     local entry
     for entry in "yt_dlp/__init__.py" "yt_dlp/version.py" "yt_dlp/extractor/youtube/"; do
-      if printf '%s\n' "$listing" | grep -qF -- "$entry"; then
+      # ⚠ NOT `printf ... | grep -qF`. `grep -q` exits the instant it matches,
+      # which closes the pipe and kills printf with SIGPIPE; under `set -o
+      # pipefail` that makes the pipeline non-zero and the check reports a FALSE
+      # FAIL. It is buffer-timing dependent, so it passes locally on an already
+      # vendored wheel and fails on a fast CI runner — observed 2026-08-24, where
+      # yt_dlp/__init__.py and yt_dlp/version.py "failed" while the later-matching
+      # yt_dlp/extractor/youtube/ passed. A herestring has no pipe and no writer.
+      if grep -qF -- "$entry" <<<"$listing"; then
         ok "wheel contains $entry"
       else
         printf 'FAIL  wheel does not contain %s\n' "$entry"; fails=1
